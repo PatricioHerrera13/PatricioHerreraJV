@@ -8,62 +8,27 @@ export default class Game extends Phaser.Scene {
 
   
     preload() {
-      // Cargar el spritesheet correcto con frames de 16x16
-      this.load.spritesheet('tilemap', '../public/ohmydungeon_v1.1.png', {
-        frameWidth: 16,
-        frameHeight: 16,
-      });
-
-      // Cargar spritesheets para paredes, pisos, objetos, enemigos, etc.
-    this.load.spritesheet('wall', 'assets/wall.png', { frameWidth: 16, frameHeight: 16 });
-    this.load.spritesheet('floor', 'assets/floor.png', { frameWidth: 16, frameHeight: 16 });
-    this.load.spritesheet('player', 'assets/player.png', { frameWidth: 16, frameHeight: 16 });
-    // Otros assets necesarios...
-
-    // Cargar otras imágenes y recursos necesarios
-    this.load.image('door', 'assets/door.png');
-    this.load.image('chest', 'assets/chest.png');
-    // Otros assets...
-
-    }
-
-
+        // Cargar el spritesheet correcto con frames de 16x16
+        this.load.spritesheet('tilemap', '../public/ohmydungeon_v1.1.png', {
+          frameWidth: 16,
+          frameHeight: 16,
+        });
   
-    create() {
-        const tileSize = 16; // Tamaño de cada celda en píxeles
-        const mapWidth = 250; // Número de celdas de ancho
-        const mapHeight = 250; // Número de celdas de alto
-    
-        // Definir el área del spritesheet que queremos mostrar (en frames)
-        const startX = 5 * frameWidth; // Columna inicial del spritesheet para la quinta celda
-        const startY = 5 * frameHeight; // Fila inicial del spritesheet para la quinta celda
-        const frameWidth = 16; // Ancho del frame en el spritesheet
-        const frameHeight = 16; // Alto del frame en el spritesheet
-    
-        // Generar el mapa utilizando un bucle anidado
-        for (let y = 0; y < mapHeight; y++) {
-            for (let x = 0; x < mapWidth; x++) {
-                // Calcular la posición en píxeles de cada celda
-                const posX = x * tileSize;
-                const posY = y * tileSize;
-    
-                // Calcular el índice del frame en el spritesheet
-                const frameX = startX + x; // Calcular la columna de frame
-                const frameY = startY + y; // Calcular la fila de frame
-    
-                // Crear una celda de tamaño tileSize x tileSize en la posición (posX, posY)
-                const cell = this.add.sprite(posX, posY, 'tilemap', frameY * mapWidth + frameX);
-                cell.setOrigin(0); // Asegura que el sprite se posicione correctamente en su celda
-            }
-        }
+        // Cargar spritesheets para paredes, pisos, objetos, enemigos, etc.
+        this.load.spritesheet('wall', 'assets/wall.png', { frameWidth: 16, frameHeight: 16 });
+        this.load.spritesheet('floor', 'assets/floor.png', { frameWidth: 16, frameHeight: 16 });
+        this.load.spritesheet('player', 'assets/player.png', { frameWidth: 16, frameHeight: 16 });
+        // Otros assets necesarios...
+  
+        // Cargar otras imágenes y recursos necesarios
+        this.load.image('door', 'assets/door.png');
+        this.load.image('chest', 'assets/chest.png');
+        // Otros assets...
     }
+    
+
       
-      //this.cameras.main.startFollow(player);
-    
-  
-    update() {
-      // Lógica de actualización del juego, por ejemplo, movimientos de jugador, colisiones, etc.
-    }
+        //this.cameras.main.startFollow(player);
     
 
 
@@ -198,5 +163,12 @@ export default class Game extends Phaser.Scene {
             roomB.tiles[pointB.y - roomB.y][pointB.x - roomB.x + i] = 'door';
         }
     }
+
+
+    update() {
+        // Lógica de actualización del juego, por ejemplo, movimientos de jugador, colisiones, etc.
+      
+    }
+    
     
 }
