@@ -7,15 +7,15 @@ export default class Game extends Phaser.Scene {
 
     preload() {
         // Cargar spritesheets y otras imágenes necesarias
-        this.load.spritesheet('wall', 'assets/wall.png', { frameWidth: 16, frameHeight: 16 });
-        this.load.spritesheet('floor', 'assets/floor.png', { frameWidth: 16, frameHeight: 16 });
-        this.load.spritesheet('player', 'assets/player.png', { frameWidth: 16, frameHeight: 16 });
-        this.load.spritesheet('specialItem', 'assets/specialItem.png', { frameWidth: 16, frameHeight: 16 });
-        this.load.image('door', 'assets/door.png');
+        this.load.spritesheet('wall', 'public/wall.png', { frameWidth: 25, frameHeight: 25 });
+        this.load.spritesheet('floor', 'public/floor.png', { frameWidth: 25, frameHeight: 25 });
+        this.load.spritesheet('player', 'public/player.png', { frameWidth: 25, frameHeight: 25 });
+        this.load.spritesheet('specialItem', 'assets/specialItem.png', { frameWidth: 25, frameHeight: 25 });
+        this.load.image('door', 'public/door.png');
     }
 
     create() {
-        const tileSize = 16; // Tamaño de cada celda en píxeles
+        const tileSize = 25; // Tamaño de cada celda en píxeles
         const mapWidth = 40; // Ancho total del mapa en celdas
         const mapHeight = 40; // Alto total del mapa en celdas
 
@@ -23,21 +23,20 @@ export default class Game extends Phaser.Scene {
         const rooms = [];
 
         // Generar la habitación inicial para el jugador
-        const playerRoom = this.generateRoom(mapWidth, mapHeight);
-        rooms.push(playerRoom);
+        let previousRoom = this.generateRoom(mapWidth, mapHeight);
+        rooms.push(previousRoom);
+
+        // Generar habitaciones intermedias adyacentes
+        const numIntermediateRooms = Phaser.Math.Between(5, 10);
+        for (let i = 0; i < numIntermediateRooms; i++) {
+            const newRoom = this.generateAdjacentRoom(previousRoom, mapWidth, mapHeight);
+            rooms.push(newRoom);
+            previousRoom = newRoom;
+        }
 
         // Generar habitación especial con el objeto para avanzar de nivel
         const exitRoom = this.generateExitRoom(mapWidth, mapHeight);
         rooms.push(exitRoom);
-
-        // Definir la cantidad de habitaciones intermedias
-        const numIntermediateRooms = Phaser.Math.Between(5, 10);
-
-        // Generar habitaciones intermedias
-        for (let i = 0; i < numIntermediateRooms; i++) {
-            const newRoom = this.generateRoom(mapWidth, mapHeight);
-            rooms.push(newRoom);
-        }
 
         // Conectar las habitaciones generadas
         this.connectRooms(rooms);
@@ -70,9 +69,32 @@ export default class Game extends Phaser.Scene {
         });
 
         // Colocar al jugador en la habitación inicial
-        const playerSpawnX = playerRoom.centerX * tileSize;
-        const playerSpawnY = playerRoom.centerY * tileSize;
+        const playerSpawnX = rooms[0].centerX * tileSize;
+        const playerSpawnY = rooms[0].centerY * tileSize;
         this.player = this.add.sprite(playerSpawnX, playerSpawnY, 'player').setOrigin(0);
+
+        // Hacer que la cámara siga al jugador
+        this.cameras.main.startFollow(this.player);
+
+        // Escuchar eventos de teclado para movimiento del jugador
+        this.input.keyboard.on('keydown', (event) => {
+            const speed = 1; // Velocidad de movimiento del jugador
+
+            switch (event.key) {
+                case 'ArrowUp':
+                    this.player.y -= tileSize * speed;
+                    break;
+                case 'ArrowDown':
+                    this.player.y += tileSize * speed;
+                    break;
+                case 'ArrowLeft':
+                    this.player.x -= tileSize * speed;
+                    break;
+                case 'ArrowRight':
+                    this.player.x += tileSize * speed;
+                    break;
+            }
+        });
 
         // Lógica adicional según las necesidades del juego, como colocar puertas, enemigos, cofres, etc.
     }
@@ -83,28 +105,37 @@ export default class Game extends Phaser.Scene {
         const startX = Phaser.Math.Between(1, mapWidth - roomWidth - 1);
         const startY = Phaser.Math.Between(1, mapHeight - roomHeight - 1);
 
-        // Generar un array 2D para representar las celdas de la habitación
-        const tiles = [];
-        for (let y = 0; y < roomHeight; y++) {
-            tiles[y] = [];
-            for (let x = 0; x < roomWidth; x++) {
-                if (x === 0 || x === roomWidth - 1 || y === 0 || y === roomHeight - 1) {
-                    tiles[y][x] = 'wall'; // Borde de la habitación como pared
-                } else {
-                    tiles[y][x] = 'floor'; // Interior de la habitación como piso
-                }
-            }
+        return this.createRoom(startX, startY, roomWidth, roomHeight);
+    }
+
+    generateAdjacentRoom(previousRoom, mapWidth, mapHeight) {
+        const roomWidth = Phaser.Math.Between(5, 10);
+        const roomHeight = Phaser.Math.Between(5, 10);
+
+        // Determinar las coordenadas iniciales adyacentes a la habitación anterior
+        let startX, startY;
+        const direction = Phaser.Math.Between(0, 3); // 0: arriba, 1: derecha, 2: abajo, 3: izquierda
+
+        switch (direction) {
+            case 0: // Arriba
+                startX = Phaser.Math.Between(previousRoom.x, previousRoom.x + previousRoom.width - roomWidth);
+                startY = previousRoom.y - roomHeight - 1;
+                break;
+            case 1: // Derecha
+                startX = previousRoom.x + previousRoom.width + 1;
+                startY = Phaser.Math.Between(previousRoom.y, previousRoom.y + previousRoom.height - roomHeight);
+                break;
+            case 2: // Abajo
+                startX = Phaser.Math.Between(previousRoom.x, previousRoom.x + previousRoom.width - roomWidth);
+                startY = previousRoom.y + previousRoom.height + 1;
+                break;
+            case 3: // Izquierda
+                startX = previousRoom.x - roomWidth - 1;
+                startY = Phaser.Math.Between(previousRoom.y, previousRoom.y + previousRoom.height - roomHeight);
+                break;
         }
 
-        return {
-            x: startX,
-            y: startY,
-            width: roomWidth,
-            height: roomHeight,
-            centerX: startX + Math.floor(roomWidth / 2),
-            centerY: startY + Math.floor(roomHeight / 2),
-            tiles: tiles
-        };
+        return this.createRoom(startX, startY, roomWidth, roomHeight);
     }
 
     generateExitRoom(mapWidth, mapHeight) {
@@ -113,6 +144,10 @@ export default class Game extends Phaser.Scene {
         const startX = mapWidth - roomWidth - 1;
         const startY = mapHeight - roomHeight - 1;
 
+        return this.createRoom(startX, startY, roomWidth, roomHeight);
+    }
+
+    createRoom(startX, startY, roomWidth, roomHeight) {
         // Generar un array 2D para representar las celdas de la habitación
         const tiles = [];
         for (let y = 0; y < roomHeight; y++) {
@@ -125,11 +160,6 @@ export default class Game extends Phaser.Scene {
                 }
             }
         }
-
-        // Colocar el objeto especial en una posición aleatoria dentro de la habitación especial
-        const specialItemX = Phaser.Math.Between(startX + 1, startX + roomWidth - 2);
-        const specialItemY = Phaser.Math.Between(startY + 1, startY + roomHeight - 2);
-        tiles[specialItemY - startY][specialItemX - startX] = 'specialItem';
 
         return {
             x: startX,
@@ -155,54 +185,69 @@ export default class Game extends Phaser.Scene {
         // Calcular la posición del centro de cada habitación
         const centerA = { x: roomA.centerX, y: roomA.centerY };
         const centerB = { x: roomB.centerX, y: roomB.centerY };
-
+    
         // Determinar la dirección entre las dos habitaciones (horizontal o vertical)
         const horizontal = centerA.x !== centerB.x;
-
-        // Definir el tamaño de la puerta (en tiles)
-        const doorSize = 2; // Tamaño de la puerta en tiles
-
-        // Elegir un punto aleatorio en las paredes de cada habitación para la puerta
-        let pointA, pointB;
-
-        if (horizontal) {
-            // Conexión horizontal
-            pointA = {
-                x: Phaser.Math.Between(roomA.x + 1, roomA.x + roomA.width - doorSize - 1),
-                y: Phaser.Math.Between(centerA.y - 1, centerA.y)
-            };
-            pointB = {
-                x: Phaser.Math.Between(roomB.x + doorSize, roomB.x + roomB.width - 2),
-                y: Phaser.Math.Between(centerB.y, centerB.y + 1)
-            };
-        } else {
-            // Conexión vertical
-            pointA = {
-                x: Phaser.Math.Between(centerA.x - 1, centerA.x),
-                y: Phaser.Math.Between(roomA.y + 1, roomA.y + roomA.height - doorSize - 1)
-            };
-            pointB = {
-                x: Phaser.Math.Between(centerB.x, centerB.x + 1),
-                y: Phaser.Math.Between(roomB.y + doorSize, roomB.y + roomB.height - 2)
-            };
-        }
-
-        // Colocar la puerta en roomA
-        for (let i = 0; i < doorSize; i++) {
+    
+        // Definir la cantidad aleatoria de puertas (entre 1 y 3)
+        const numDoors = Phaser.Math.Between(1, 3);
+    
+        for (let d = 0; d < numDoors; d++) {
+            // Definir el tamaño de la puerta (en tiles)
+            const doorSize = 1; // Tamaño de la puerta en tiles
+    
+            // Elegir un punto aleatorio en las paredes de cada habitación para la puerta
+            let pointA, pointB;
+    
             if (horizontal) {
-                roomA.tiles[pointA.y - roomA.y][pointA.x - roomA.x + i] = 'door';
+                // Conexión horizontal
+                const yA = Phaser.Math.Between(Math.max(roomA.y + 1, centerA.y - doorSize + 1), Math.min(roomA.y + roomA.height - doorSize - 1, centerA.y));
+                const yB = Phaser.Math.Between(Math.max(roomB.y + 1, centerB.y - doorSize + 1), Math.min(roomB.y + roomB.height - doorSize - 1, centerB.y));
+    
+                pointA = {
+                    x: centerA.x,
+                    y: yA
+                };
+                pointB = {
+                    x: centerB.x,
+                    y: yB
+                };
             } else {
-                roomA.tiles[pointA.y - roomA.y + i][pointA.x - roomA.x] = 'door';
+                // Conexión vertical
+                const xA = Phaser.Math.Between(Math.max(roomA.x + 1, centerA.x - doorSize + 1), Math.min(roomA.x + roomA.width - doorSize - 1, centerA.x));
+                const xB = Phaser.Math.Between(Math.max(roomB.x + 1, centerB.x - doorSize + 1), Math.min(roomB.x + roomB.width - doorSize - 1, centerB.x));
+    
+                pointA = {
+                    x: xA,
+                    y: centerA.y
+                };
+                pointB = {
+                    x: xB,
+                    y: centerB.y
+                };
+            }
+    
+            // Colocar la puerta en roomA
+            if (horizontal) {
+                for (let i = 0; i < doorSize; i++) {
+                    roomA.tiles[pointA.y - roomA.y][pointA.x - roomA.x + i] = 'door';
+                }
+            } else {
+                for (let i = 0; i < doorSize; i++) {
+                    roomA.tiles[pointA.y - roomA.y + i][pointA.x - roomA.x] = 'door';
+                }
+            }
+    
+            // Colocar la puerta en roomB
+            if (horizontal) {
+                for (let i = 0; i < doorSize; i++) {
+                    roomB.tiles[pointB.y - roomB.y][pointB.x - roomB.x + i] = 'door';
+                }
+            } else {
+                for (let i = 0; i < doorSize; i++) {
+                    roomB.tiles[pointB.y - roomB.y + i][pointB.x - roomB.x] = 'door';
+                }
             }
         }
-
-        // Colocar la puerta en roomB
-        for (let i = 0; i < doorSize; i++) {
-            if (horizontal) {
-                roomB.tiles[pointB.y - roomB.y][pointB.x - roomB.x + i] = 'door';
-            } else {
-                roomB.tiles[pointB.y - roomB.y + i][pointB.x - roomB.x] = 'door';
-            }
-        }
-    }
+    }    
 }
