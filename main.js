@@ -1,3 +1,4 @@
+import End from "./Escenes/End.js";
 import Game from "./Escenes/Game.js";
 // Create a new Phaser config object
 const config = {
@@ -14,7 +15,7 @@ const config = {
       debug: true,
     },
   },
-  scene: [Game],
+  scene: [Game, End],
 };
 
 window.game = new Phaser.Game(config);

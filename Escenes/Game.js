@@ -16,7 +16,10 @@ export default class Game extends Phaser.Scene {
         this.player = null; // Jugador
         this.doors = []; // Lista de puertas
         this.playerSpawned = false; // Bandera para asegurar que el jugador se coloque solo una vez
-    }    
+        this.cursors = null; // Inicializar cursors en null
+        this.projectiles = []; // Arreglo para almacenar los proyectiles
+        this.enemies = []; // Arreglo para almacenar los enemigos
+    }        
 
     preload() {
         // Cargar spritesheets y otras imágenes necesarias
@@ -24,13 +27,17 @@ export default class Game extends Phaser.Scene {
         this.load.spritesheet('floor', 'public/floor.png', { frameWidth: 25, frameHeight: 25 });
         this.load.spritesheet('door', 'public/door.png', { frameWidth: 25, frameHeight: 25 });
         this.load.spritesheet('player', 'public/player.png', { frameWidth: 25, frameHeight: 25 });
+        this.load.spritesheet('projectile', 'public/projectiles.png', { frameWidth: 10, frameHeight: 10 });
+        this.load.spritesheet('enemy', 'public/enemy.png', { frameWidth: 25, frameHeight: 25 }); // Cargar el sprite del enemigo
     }
 
     create() {
         // Crear grupos para manejar las capas
-        this.wallLayer = this.add.group();
+        this.wallLayer = this.physics.add.staticGroup();
         this.floorLayer = this.add.group();
-    
+        this.projectileLayer = this.physics.add.group(); // Grupo para los proyectiles
+        this.enemies = this.physics.add.group();
+
         // Generar la primera habitación inicial
         this.generateFirstRoom();
     
@@ -38,14 +45,32 @@ export default class Game extends Phaser.Scene {
         if (!this.playerSpawned && this.rooms.length > 0) {
             let firstRoom = this.rooms[0];
             // Colocar al jugador en el centro de la primera habitación generada
-            this.player = this.add.sprite((firstRoom.x + firstRoom.width / 2) * 25, (firstRoom.y + firstRoom.height / 2) * 25, 'player');
+            this.player = this.physics.add.sprite((firstRoom.x + firstRoom.width / 2) * 25, (firstRoom.y + firstRoom.height / 2) * 25, 'player');
             this.player.setDepth(10); // Asegurar que el jugador esté sobre los demás elementos
             this.playerSpawned = true;
+
+            // Configurar el cuerpo físico del jugador
+            this.player.body.setSize(20, 20);
+            this.player.body.setCollideWorldBounds(true); // Colisionar con los límites del mundo
+            
+            // Colisionar con las paredes estáticas
+            this.physics.add.collider(this.player, this.wallLayer);
         }
     
-        // Habilitar el control de teclado
+        // Configurar el clic izquierdo del ratón para disparar proyectiles
+        this.input.on('pointerdown', (pointer) => {
+        if (pointer.leftButtonDown()) {
+            this.shootProjectile(pointer.worldX, pointer.worldY);
+        }
+        });
+        
         this.cursors = this.input.keyboard.createCursorKeys();
-    
+
+        // Colisiones de proyectiles con paredes
+        this.physics.add.collider(this.projectileLayer, this.wallLayer, (projectile, wall) => {
+        projectile.destroy();
+        });
+
         // Hacer que la cámara siga al jugador
         this.cameras.main.startFollow(this.player);
         // Configurar límites de la cámara
@@ -53,17 +78,23 @@ export default class Game extends Phaser.Scene {
     }    
 
     update() {
-        // Mover el jugador con las teclas de flecha
+        // Mover el jugador con las teclas W, A, S, D
+        const playerSpeed = 150; // Velocidad del jugador
+
         if (this.cursors.left.isDown) {
-            this.player.x -= 2.5;
+            this.player.setVelocityX(-playerSpeed);
         } else if (this.cursors.right.isDown) {
-            this.player.x += 2.5;
+            this.player.setVelocityX(playerSpeed);
+        } else {
+            this.player.setVelocityX(0);
         }
 
         if (this.cursors.up.isDown) {
-            this.player.y -= 2.5;
+            this.player.setVelocityY(-playerSpeed);
         } else if (this.cursors.down.isDown) {
-            this.player.y += 2.5;
+            this.player.setVelocityY(playerSpeed);
+        } else {
+            this.player.setVelocityY(0);
         }
 
         // Verificar si el jugador está sobre una puerta
@@ -76,6 +107,37 @@ export default class Game extends Phaser.Scene {
             }
         }
     }
+
+    shootProjectile(targetX, targetY) {
+        const projectileSpeed = 300; // Velocidad del proyectil
+    
+        // Calcular la dirección hacia la que apunta el proyectil
+        const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, targetX, targetY);
+    
+        // Crear el proyectil en la posición del jugador
+        const projectile = this.physics.add.sprite(this.player.x, this.player.y, 'projectile');
+    
+        // Habilitar física y ajustar el tamaño del cuerpo de colisión
+        projectile.setOrigin(0.5, 0.5);
+        this.physics.add.existing(projectile);
+        projectile.body.setSize(8, 8, true);
+    
+        // Ajustar la rotación del proyectil para que apunte en la dirección correcta
+        projectile.rotation = angle;
+    
+        // Establecer la velocidad del proyectil en función del ángulo calculado
+        this.physics.velocityFromRotation(angle, projectileSpeed, projectile.body.velocity);
+    
+        // Agregar el proyectil al grupo y al arreglo de proyectiles
+        this.projectileLayer.add(projectile);
+        this.projectiles.push(projectile);
+    
+        // Destruir el proyectil después de un tiempo
+        this.time.delayedCall(2000, () => {
+            projectile.destroy();
+            this.projectiles = this.projectiles.filter(p => p !== projectile);
+        });
+    }    
 
     generateFirstRoom(connectedDoor = null) {
         if (this.roomCount >= this.maxRooms) {
@@ -101,12 +163,6 @@ export default class Game extends Phaser.Scene {
     
             // Generar puertas en los bordes de la habitación
             this.generateDoors(newRoom);
-    
-            if (connectedDoor) {
-                // Mover la puerta a la nueva posición al final del pasillo
-                connectedDoor.x = (roomX + roomWidth / 2) * 25;
-                connectedDoor.y = (roomY + roomHeight / 2) * 25;
-            }
     
             // Mensaje de consola para depuración
             console.log(`Habitación generada en (${roomX}, ${roomY}) de tamaño ${roomWidth}x${roomHeight}`);
@@ -156,65 +212,141 @@ export default class Game extends Phaser.Scene {
             return false; // La posición no está ocupada por una habitación
         };
     
-        // Función para generar la habitación emergente centrada en la dirección preferida desde la puerta
-        const tryGenerateRoom = (direction, distance) => {
         let roomX, roomY;
-
-        switch (direction) {
+        let roomWidth = Phaser.Math.Between(this.roomMinSize, this.roomMaxSize);
+        let roomHeight = Phaser.Math.Between(this.roomMinSize, this.roomMaxSize);
+    
+        switch (preferredDirection) {
             case 0: // Hacia la izquierda
-                roomX = doorPos.x - (distance + 1); // Centrado horizontalmente con respecto a la puerta
+                roomX = doorPos.x - (roomWidth + 1); // Posiciona la habitación a la izquierda del pasillo
                 roomY = doorPos.y - Math.floor(roomHeight / 2); // Centrado verticalmente con respecto a la puerta
                 break;
             case 1: // Hacia la derecha
-                roomX = doorPos.x + 1; // Centrado horizontalmente con respecto a la puerta
+                roomX = doorPos.x + 1; // Posiciona la habitación a la derecha del pasillo
                 roomY = doorPos.y - Math.floor(roomHeight / 2); // Centrado verticalmente con respecto a la puerta
                 break;
             case 2: // Hacia arriba
                 roomX = doorPos.x - Math.floor(roomWidth / 2); // Centrado horizontalmente con respecto a la puerta
-                roomY = doorPos.y - (distance + 1); // Centrado verticalmente con respecto a la puerta
+                roomY = doorPos.y - (roomHeight + 1); // Posiciona la habitación arriba del pasillo
                 break;
             case 3: // Hacia abajo
                 roomX = doorPos.x - Math.floor(roomWidth / 2); // Centrado horizontalmente con respecto a la puerta
-                roomY = doorPos.y + 1; // Centrado verticalmente con respecto a la puerta
+                roomY = doorPos.y + 1; // Posiciona la habitación abajo del pasillo
                 break;
             default:
                 console.error("Dirección de generación de habitación emergente no válida.");
-                return false;
-            }
-
-            // Verificar si la posición está ocupada por otra habitación
-            if (!isPositionOccupiedByRoom(roomX, roomY)) {
-                // Crear la habitación emergente
-                let roomWidth = Phaser.Math.Between(this.roomMinSize, this.roomMaxSize);
-                let roomHeight = Phaser.Math.Between(this.roomMinSize, this.roomMaxSize);
-                let newRoom = { x: roomX, y: roomY, width: roomWidth, height: roomHeight };
-
-                if  (!this.checkRoomOverlap(newRoom)) {
-                    this.createRoom(newRoom);
-                    this.rooms.push(newRoom);
-                    this.roomCount++;
-                    console.log(`Habitación emergente generada en (${roomX}, ${roomY}) de tamaño ${roomWidth}x${roomHeight}`);
-
-                    // Generar puertas en los bordes de la habitación emergente
-                    this.generateDoors(newRoom);
-
-                    return true;
-                }
-            }
-
-            return false;
-        };
+                return;
+        }
     
-        // Intentar generar la habitación emergente con distancias crecientes hasta 10 intentos
-        for (let distance = 0; distance <= 10; distance++) {
-            if (tryGenerateRoom(preferredDirection, distance)) {
+        // Intentar generar la habitación
+        let newRoom = { x: roomX, y: roomY, width: roomWidth, height: roomHeight };
+    
+        for (let distance = 0; distance <= 30; distance++) {
+            if (!isPositionOccupiedByRoom(roomX, roomY) && !this.checkRoomOverlap(newRoom)) {
+                this.createRoom(newRoom);
+                this.rooms.push(newRoom);
+                this.roomCount++;
+                console.log(`Habitación emergente generada en (${roomX}, ${roomY}) de tamaño ${roomWidth}x${roomHeight}`);
+    
+                // Generar una puerta en el lado de la habitación adyacente al pasillo
+                this.generateDoorForEmergentRoom(newRoom, door, preferredDirection);
+    
+                // Generar enemigos en la habitación generada
+                this.generateEnemies(newRoom);
+    
                 return; // Habitación generada exitosamente
             }
+    
+            // Avanzar un tile más en la dirección del pasillo y volver a intentar
+            switch (preferredDirection) {
+                case 0: roomX--; break; // Izquierda
+                case 1: roomX++; break; // Derecha
+                case 2: roomY--; break; // Arriba
+                case 3: roomY++; break; // Abajo
+            }
+    
+            // Actualizar la posición de la habitación y la variable de comprobación
+            newRoom = { x: roomX, y: roomY, width: roomWidth, height: roomHeight };
         }
     
         console.log("No se pudo generar la habitación emergente después de varios intentos.");
     }
-                         
+    
+    generateEnemies(room) {
+        const numEnemies = 5;
+    
+        // Asegurarse de que this.enemies es un grupo válido
+        if (!this.enemies) {
+            this.enemies = this.physics.add.group();
+        }
+    
+        for (let i = 0; i < numEnemies; i++) {
+            // Obtener una posición aleatoria dentro de la habitación
+            const x = Phaser.Math.Between(room.x, room.x + room.width - 1);
+            const y = Phaser.Math.Between(room.y, room.y + room.height - 1);
+    
+            // Crear un enemigo en la posición aleatoria
+            const enemy = this.physics.add.sprite(x, y, 'enemy');
+            this.enemies.add(enemy); // Agregar el enemigo al grupo de enemigos
+    
+            // Configurar física del enemigo
+            this.physics.add.existing(enemy);
+            enemy.body.setSize(25, 25); // Ajustar tamaño del cuerpo de colisión del enemigo
+    
+            // Seguir al jugador
+            this.physics.moveToObject(enemy, this.player, 100);
+    
+            // Colisión con proyectiles
+            this.physics.add.overlap(this.projectiles, enemy, (projectile, enemy) => {
+                projectile.destroy(); // Destruir el proyectil
+                enemy.destroy(); // Destruir el enemigo
+                this.enemies.remove(enemy); // Remover el enemigo del grupo de enemigos
+            });
+    
+            // Colisión con el jugador
+            this.physics.add.overlap(this.player, enemy, () => {
+                this.scene.start('END'); // Activar la escena END si el jugador colisiona con un enemigo
+            });
+        }
+    }
+    
+
+    generateDoorForEmergentRoom(room, door, direction) {
+        let doorPos;
+        switch (direction) {
+            case 0: // Hacia la izquierda
+                doorPos = { x: room.x + room.width - 1, y: door.getData('position').y };
+                break;
+            case 1: // Hacia la derecha
+                doorPos = { x: room.x, y: door.getData('position').y };
+                break;
+            case 2: // Hacia arriba
+                doorPos = { x: door.getData('position').x, y: room.y + room.height - 1 };
+                break;
+            case 3: // Hacia abajo
+                doorPos = { x: door.getData('position').x, y: room.y };
+                break;
+            default:
+                console.error("Dirección de generación de puerta no válida.");
+                return;
+        }
+    
+        // Crear la puerta en lugar de la pared
+        this.wallLayer.children.each(function (wall) {
+            if (wall.x === doorPos.x * 25 && wall.y === doorPos.y * 25) {
+                wall.destroy();
+            }
+        });
+    
+        let doorSprite = this.add.sprite(doorPos.x * 25, doorPos.y * 25, 'door');
+        doorSprite.setDepth(5); // Asegurar que la puerta esté sobre los elementos de suelo pero debajo del jugador
+        doorSprite.setData('position', { x: doorPos.x, y: doorPos.y });
+        doorSprite.setData('used', true); // Marcar la puerta como usada
+        this.doors.push(doorSprite);
+        this.usedDoors.add(`${doorPos.x},${doorPos.y}`); // Agregar la puerta a la lista de puertas usadas
+    
+        console.log(`Puerta creada y marcada como usada en (${doorSprite.x}, ${doorSprite.y})`);
+    }                                    
     
     generateDoors(room) {
         // Colocar puertas en los bordes de la habitación (hasta 4 puertas)
@@ -381,5 +513,40 @@ export default class Game extends Phaser.Scene {
             room1.y < room2.y + room2.height &&
             room1.y + room1.height > room2.y
         );
+ 
     }
+
+    enemiesSpawned() {
+        const numEnemies = 5;
+    
+        // Generar enemigos
+        for (let i = 0; i < numEnemies; i++) {
+            // Obtener una posición aleatoria dentro de la habitación generada
+            const { x, y } = this.generateNextRoom(); // Suponiendo que generateNextRoom devuelve las coordenadas x e y válidas
+    
+            // Crear un enemigo en la posición generada
+            const enemy = this.physics.add.sprite(x, y, 'enemy');
+            enemy.setOrigin(0.5, 0.5);
+            this.enemies.add(enemy); // Agregar el enemigo al grupo de enemigos
+    
+            // Configurar la física del enemigo
+            this.physics.add.existing(enemy);
+            enemy.body.setSize(25, 25); // Ajustar el tamaño del cuerpo de colisión del enemigo
+    
+            // Seguir al jugador
+            this.physics.moveToObject(enemy, this.player, 100);
+    
+            // Colisiones con proyectiles
+            this.physics.add.overlap(this.projectiles, enemy, (projectile, enemy) => {
+                projectile.destroy(); // Destruir el proyectil
+                enemy.destroy(); // Destruir el enemigo
+                this.enemies.remove(enemy); // Remover el enemigo del grupo de enemigos
+            });
+    
+            // Colisión con el jugador
+            this.physics.add.overlap(this.player, enemy, () => {
+                this.scene.start('END'); // Activar la escena END si el jugador colisiona con un enemigo
+            });
+        }
+    }    
 }
