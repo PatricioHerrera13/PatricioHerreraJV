@@ -32,7 +32,7 @@ export default class Game extends Phaser.Scene {
         this.floorLayer = this.add.group();
     
         // Generar la primera habitación inicial
-        this.generateNextRoom();
+        this.generateFirstRoom();
     
         // Verificar si el jugador ya ha sido colocado en una habitación
         if (!this.playerSpawned && this.rooms.length > 0) {
@@ -77,7 +77,7 @@ export default class Game extends Phaser.Scene {
         }
     }
 
-    generateNextRoom(connectedDoor = null) {
+    generateFirstRoom(connectedDoor = null) {
         if (this.roomCount >= this.maxRooms) {
             // Se alcanzó el límite de habitaciones, detener la generación
             console.log("Se alcanzó el límite de habitaciones generadas.");
@@ -111,8 +111,111 @@ export default class Game extends Phaser.Scene {
             // Mensaje de consola para depuración
             console.log(`Habitación generada en (${roomX}, ${roomY}) de tamaño ${roomWidth}x${roomHeight}`);
         }
-    }    
+    }
 
+    generateNextRoom(door, preferredDirection) {
+        console.log("Generando habitación emergente...");
+    
+        let doorPos = door.getData('position');
+        console.log("Posición de la puerta:", doorPos);
+    
+        // Obtener la habitación a la que pertenece la puerta
+        let parentRoom = this.rooms.find(room =>
+            doorPos.x >= room.x && doorPos.x < room.x + room.width &&
+            doorPos.y >= room.y && doorPos.y < room.y + room.height
+        );
+    
+        if (!parentRoom) {
+            console.error("No se encontró la habitación para la puerta.");
+            return;
+        }
+    
+        // Definir la dirección preferida si no se proporciona
+        if (preferredDirection === undefined) {
+            if (doorPos.x === parentRoom.x) {
+                preferredDirection = 0; // Hacia la izquierda
+            } else if (doorPos.x === parentRoom.x + parentRoom.width - 1) {
+                preferredDirection = 1; // Hacia la derecha
+            } else if (doorPos.y === parentRoom.y) {
+                preferredDirection = 2; // Hacia arriba
+            } else if (doorPos.y === parentRoom.y + parentRoom.height - 1) {
+                preferredDirection = 3; // Hacia abajo
+            } else {
+                console.error("La puerta no está en un borde de la habitación.");
+                return;
+            }
+        }
+    
+        // Función auxiliar para verificar si una posición está ocupada por una habitación
+        const isPositionOccupiedByRoom = (x, y) => {
+            for (let room of this.rooms) {
+                if (x >= room.x && x < room.x + room.width && y >= room.y && y < room.y + room.height) {
+                    return true; // La posición está ocupada por una habitación
+                }
+            }
+            return false; // La posición no está ocupada por una habitación
+        };
+    
+        // Función para generar la habitación emergente centrada en la dirección preferida desde la puerta
+        const tryGenerateRoom = (direction, distance) => {
+        let roomX, roomY;
+
+        switch (direction) {
+            case 0: // Hacia la izquierda
+                roomX = doorPos.x - (distance + 1); // Centrado horizontalmente con respecto a la puerta
+                roomY = doorPos.y - Math.floor(roomHeight / 2); // Centrado verticalmente con respecto a la puerta
+                break;
+            case 1: // Hacia la derecha
+                roomX = doorPos.x + 1; // Centrado horizontalmente con respecto a la puerta
+                roomY = doorPos.y - Math.floor(roomHeight / 2); // Centrado verticalmente con respecto a la puerta
+                break;
+            case 2: // Hacia arriba
+                roomX = doorPos.x - Math.floor(roomWidth / 2); // Centrado horizontalmente con respecto a la puerta
+                roomY = doorPos.y - (distance + 1); // Centrado verticalmente con respecto a la puerta
+                break;
+            case 3: // Hacia abajo
+                roomX = doorPos.x - Math.floor(roomWidth / 2); // Centrado horizontalmente con respecto a la puerta
+                roomY = doorPos.y + 1; // Centrado verticalmente con respecto a la puerta
+                break;
+            default:
+                console.error("Dirección de generación de habitación emergente no válida.");
+                return false;
+            }
+
+            // Verificar si la posición está ocupada por otra habitación
+            if (!isPositionOccupiedByRoom(roomX, roomY)) {
+                // Crear la habitación emergente
+                let roomWidth = Phaser.Math.Between(this.roomMinSize, this.roomMaxSize);
+                let roomHeight = Phaser.Math.Between(this.roomMinSize, this.roomMaxSize);
+                let newRoom = { x: roomX, y: roomY, width: roomWidth, height: roomHeight };
+
+                if  (!this.checkRoomOverlap(newRoom)) {
+                    this.createRoom(newRoom);
+                    this.rooms.push(newRoom);
+                    this.roomCount++;
+                    console.log(`Habitación emergente generada en (${roomX}, ${roomY}) de tamaño ${roomWidth}x${roomHeight}`);
+
+                    // Generar puertas en los bordes de la habitación emergente
+                    this.generateDoors(newRoom);
+
+                    return true;
+                }
+            }
+
+            return false;
+        };
+    
+        // Intentar generar la habitación emergente con distancias crecientes hasta 10 intentos
+        for (let distance = 0; distance <= 10; distance++) {
+            if (tryGenerateRoom(preferredDirection, distance)) {
+                return; // Habitación generada exitosamente
+            }
+        }
+    
+        console.log("No se pudo generar la habitación emergente después de varios intentos.");
+    }
+                         
+    
     generateDoors(room) {
         // Colocar puertas en los bordes de la habitación (hasta 4 puertas)
         let possibleDoorPositions = [];
@@ -120,14 +223,21 @@ export default class Game extends Phaser.Scene {
         if (room.x + room.width < this.mapWidth - 2) possibleDoorPositions.push({ x: room.x + room.width - 1, y: Phaser.Math.Between(room.y + 1, room.y + room.height - 2) });
         if (room.y > 2) possibleDoorPositions.push({ x: Phaser.Math.Between(room.x + 1, room.x + room.width - 2), y: room.y });
         if (room.y + room.height < this.mapHeight - 2) possibleDoorPositions.push({ x: Phaser.Math.Between(room.x + 1, room.x + room.width - 2), y: room.y + room.height - 1 });
-
+    
         let doorsToCreate = Phaser.Math.Between(1, Math.min(4, possibleDoorPositions.length));
         for (let i = 0; i < doorsToCreate; i++) {
             let doorPos = possibleDoorPositions.splice(Phaser.Math.Between(0, possibleDoorPositions.length - 1), 1)[0];
             let doorKey = `${doorPos.x},${doorPos.y}`;
     
             if (!this.usedDoors.has(doorKey)) {
-                // Crear la puerta
+                // Eliminar la pared existente en la posición de la puerta
+                this.wallLayer.children.each(function (wall) {
+                    if (wall.x === doorPos.x * 25 && wall.y === doorPos.y * 25) {
+                        wall.destroy();
+                    }
+                });
+    
+                // Crear la puerta en lugar de la pared
                 let door = this.add.sprite(doorPos.x * 25, doorPos.y * 25, 'door');
                 door.setDepth(5); // Asegurar que la puerta esté sobre los elementos de suelo pero debajo del jugador
                 door.setData('position', { x: doorPos.x, y: doorPos.y });
@@ -139,24 +249,27 @@ export default class Game extends Phaser.Scene {
                 console.log(`Puerta creada en (${door.x}, ${door.y})`);
             }
         }
-    }
+    }    
 
     createPassage(door) {
-        // Crear un pasillo de 3 tiles de ancho y 3 tiles de largo
-        let passageLength = 3;
+        console.log("Generando pasillo...");
+        
+        // Crear un pasillo de 1 tile de ancho y largo
+        let passageLength = 1;
         let doorPos = door.getData('position');
-
+        console.log("Posición de la puerta:", doorPos);
+    
         // Obtener la habitación a la que pertenece la puerta
         let parentRoom = this.rooms.find(room =>
             doorPos.x >= room.x && doorPos.x < room.x + room.width &&
             doorPos.y >= room.y && doorPos.y < room.y + room.height
         );
-
+    
         if (!parentRoom) {
             console.error("No se encontró la habitación para la puerta.");
             return;
         }
-
+    
         // Determinar la dirección para generar el pasillo basado en la posición de la puerta
         let preferredDirection;
         if (doorPos.x === parentRoom.x) {
@@ -171,7 +284,7 @@ export default class Game extends Phaser.Scene {
             console.error("La puerta no está en un borde de la habitación.");
             return;
         }
-
+    
         // Función auxiliar para verificar si una posición está ocupada por una habitación
         const isPositionOccupiedByRoom = (x, y) => {
             for (let room of this.rooms) {
@@ -181,69 +294,44 @@ export default class Game extends Phaser.Scene {
             }
             return false; // La posición no está ocupada por una habitación
         };
-
+    
         // Generar el pasillo en la dirección preferida
         switch (preferredDirection) {
             case 0: // Hacia la izquierda
-                for (let x = doorPos.x - passageLength; x < doorPos.x; x++) {
-                    if (x < 0 || isPositionOccupiedByRoom(x, doorPos.y)) {
-                        break; // Fuera de los límites del mapa o posición ocupada por una habitación
-                    }
-
-                    // Dibujar el pasillo
-                    this.floorLayer.add(this.add.sprite(x * 25, doorPos.y * 25, 'floor'));
-                    this.wallLayer.add(this.add.sprite(x * 25, (doorPos.y - 1) * 25, 'wall'));
-                    this.wallLayer.add(this.add.sprite(x * 25, (doorPos.y + 1) * 25, 'wall'));
+                if (doorPos.x - passageLength >= 0 && !isPositionOccupiedByRoom(doorPos.x - passageLength, doorPos.y)) {
+                    this.floorLayer.add(this.add.sprite((doorPos.x - passageLength) * 25, doorPos.y * 25, 'floor'));
+                    this.wallLayer.add(this.add.sprite((doorPos.x - passageLength) * 25, (doorPos.y - 1) * 25, 'wall'));
+                    this.wallLayer.add(this.add.sprite((doorPos.x - passageLength) * 25, (doorPos.y + 1) * 25, 'wall'));
                 }
                 break;
             case 1: // Hacia la derecha
-                for (let x = doorPos.x + 1; x <= doorPos.x + passageLength; x++) {
-                    if (x >= this.mapWidth || isPositionOccupiedByRoom(x, doorPos.y)) {
-                        break; // Fuera de los límites del mapa o posición ocupada por una habitación
-                    }
-
-                    // Dibujar el pasillo
-                    this.floorLayer.add(this.add.sprite(x * 25, doorPos.y * 25, 'floor'));
-                    this.wallLayer.add(this.add.sprite(x * 25, (doorPos.y - 1) * 25, 'wall'));
-                    this.wallLayer.add(this.add.sprite(x * 25, (doorPos.y + 1) * 25, 'wall'));
+                if (doorPos.x + 1 < this.mapWidth && !isPositionOccupiedByRoom(doorPos.x + 1, doorPos.y)) {
+                    this.floorLayer.add(this.add.sprite((doorPos.x + 1) * 25, doorPos.y * 25, 'floor'));
+                    this.wallLayer.add(this.add.sprite((doorPos.x + 1) * 25, (doorPos.y - 1) * 25, 'wall'));
+                    this.wallLayer.add(this.add.sprite((doorPos.x + 1) * 25, (doorPos.y + 1) * 25, 'wall'));
                 }
                 break;
             case 2: // Hacia arriba
-                for (let y = doorPos.y - passageLength; y < doorPos.y; y++) {
-                    if (y < 0 || isPositionOccupiedByRoom(doorPos.x, y)) {
-                        break; // Fuera de los límites del mapa o posición ocupada por una habitación
-                    }
-
-                    // Dibujar el pasillo
-                    this.floorLayer.add(this.add.sprite(doorPos.x * 25, y * 25, 'floor'));
-                    this.wallLayer.add(this.add.sprite((doorPos.x - 1) * 25, y * 25, 'wall'));
-                    this.wallLayer.add(this.add.sprite((doorPos.x + 1) * 25, y * 25, 'wall'));
+                if (doorPos.y - passageLength >= 0 && !isPositionOccupiedByRoom(doorPos.x, doorPos.y - passageLength)) {
+                    this.floorLayer.add(this.add.sprite(doorPos.x * 25, (doorPos.y - passageLength) * 25, 'floor'));
+                    this.wallLayer.add(this.add.sprite((doorPos.x - 1) * 25, (doorPos.y - passageLength) * 25, 'wall'));
+                    this.wallLayer.add(this.add.sprite((doorPos.x + 1) * 25, (doorPos.y - passageLength) * 25, 'wall'));
                 }
                 break;
             case 3: // Hacia abajo
-                for (let y = doorPos.y + 1; y <= doorPos.y + passageLength; y++) {
-                    if (y >= this.mapHeight || isPositionOccupiedByRoom(doorPos.x, y)) {
-                        break; // Fuera de los límites del mapa o posición ocupada por una habitación
-                    }
-
-                    // Dibujar el pasillo
-                    this.floorLayer.add(this.add.sprite(doorPos.x * 25, y * 25, 'floor'));
-                    this.wallLayer.add(this.add.sprite((doorPos.x - 1) * 25, y * 25, 'wall'));
-                    this.wallLayer.add(this.add.sprite((doorPos.x + 1) * 25, y * 25, 'wall'));
+                if (doorPos.y + 1 < this.mapHeight && !isPositionOccupiedByRoom(doorPos.x, doorPos.y + 1)) {
+                    this.floorLayer.add(this.add.sprite(doorPos.x * 25, (doorPos.y + 1) * 25, 'floor'));
+                    this.wallLayer.add(this.add.sprite((doorPos.x - 1) * 25, (doorPos.y + 1) * 25, 'wall'));
+                    this.wallLayer.add(this.add.sprite((doorPos.x + 1) * 25, (doorPos.y + 1) * 25, 'wall'));
                 }
                 break;
-            default:
-                console.error("Dirección de pasillo no válida.");
-                return;
         }
-
-        // Generar una nueva habitación conectada a la nueva puerta
-        let endDoorPos = { x: doorPos.x, y: doorPos.y };
-        this.generateNextRoom(endDoorPos);
-
-        // Mensaje de consola para depuración
-        console.log(`Nueva habitación generada conectada a (${endDoorPos.x}, ${endDoorPos.y})`);
-    }
+    
+        // Llamar a generateNextRoom para crear la habitación emergente al final del pasillo
+        this.generateNextRoom(door);
+    
+        console.log("Pasillo generado en dirección", preferredDirection);
+    }        
 
     createRoom(room) {
         // Dibujar los bordes de la habitación
@@ -262,11 +350,36 @@ export default class Game extends Phaser.Scene {
     checkRoomOverlap(newRoom) {
         // Verificar si la nueva habitación se superpone con alguna habitación existente
         for (let room of this.rooms) {
-            if (newRoom.x < room.x + room.width && newRoom.x + newRoom.width > room.x &&
-                newRoom.y < room.y + room.height && newRoom.y + newRoom.height > room.y) {
+            if (this.doRoomsOverlap(room, newRoom)) {
                 return true; // Se superpone con otra habitación
             }
         }
-        return false; // No se superpone con otras habitaciones
+    
+        // Verificar si la nueva habitación se superpone con algún pasillo generado
+        for (let door of this.doors) {
+            let doorPos = door.getData('position');
+            // Crear un objeto que represente el pasillo generado
+            let passage = {
+                x: doorPos.x - 1,
+                y: doorPos.y - 1,
+                width: 3,
+                height: 3
+            };
+            if (this.doRoomsOverlap(passage, newRoom)) {
+                return true; // Se superpone con un pasillo
+            }
+        }
+    
+        return false; // No se superpone con otras habitaciones ni pasillos
+    }
+    
+    // Función auxiliar para verificar si dos habitaciones se superponen
+    doRoomsOverlap(room1, room2) {
+        return (
+            room1.x < room2.x + room2.width &&
+            room1.x + room1.width > room2.x &&
+            room1.y < room2.y + room2.height &&
+            room1.y + room1.height > room2.y
+        );
     }
 }
