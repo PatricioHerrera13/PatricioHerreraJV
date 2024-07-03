@@ -16,9 +16,6 @@ export default class Game extends Phaser.Scene {
         this.player = null; // Jugador
         this.doors = []; // Lista de puertas
         this.playerSpawned = false; // Bandera para asegurar que el jugador se coloque solo una vez
-        this.cursors = null; // Inicializar cursors en null
-        this.projectiles = []; // Arreglo para almacenar los proyectiles
-        this.enemies = []; // Arreglo para almacenar los enemigos
     }        
 
     preload() {
@@ -27,16 +24,12 @@ export default class Game extends Phaser.Scene {
         this.load.spritesheet('floor', 'public/floor.png', { frameWidth: 25, frameHeight: 25 });
         this.load.spritesheet('door', 'public/door.png', { frameWidth: 25, frameHeight: 25 });
         this.load.spritesheet('player', 'public/player.png', { frameWidth: 25, frameHeight: 25 });
-        this.load.spritesheet('projectile', 'public/projectiles.png', { frameWidth: 10, frameHeight: 10 });
-        this.load.spritesheet('enemy', 'public/enemy.png', { frameWidth: 25, frameHeight: 25 }); // Cargar el sprite del enemigo
     }
 
     create() {
         // Crear grupos para manejar las capas
-        this.wallLayer = this.physics.add.staticGroup();
+        this.wallLayer = this.add.group();
         this.floorLayer = this.add.group();
-        this.projectileLayer = this.physics.add.group(); // Grupo para los proyectiles
-        this.enemies = this.physics.add.group();
 
         // Generar la primera habitación inicial
         this.generateFirstRoom();
@@ -48,53 +41,30 @@ export default class Game extends Phaser.Scene {
             this.player = this.physics.add.sprite((firstRoom.x + firstRoom.width / 2) * 25, (firstRoom.y + firstRoom.height / 2) * 25, 'player');
             this.player.setDepth(10); // Asegurar que el jugador esté sobre los demás elementos
             this.playerSpawned = true;
-
-            // Configurar el cuerpo físico del jugador
-            this.player.body.setSize(20, 20);
-            this.player.body.setCollideWorldBounds(true); // Colisionar con los límites del mundo
-            
-            // Colisionar con las paredes estáticas
-            this.physics.add.collider(this.player, this.wallLayer);
+    
         }
     
-        // Configurar el clic izquierdo del ratón para disparar proyectiles
-        this.input.on('pointerdown', (pointer) => {
-        if (pointer.leftButtonDown()) {
-            this.shootProjectile(pointer.worldX, pointer.worldY);
-        }
-        });
-        
+        // Habilitar el control de teclado
         this.cursors = this.input.keyboard.createCursorKeys();
-
-        // Colisiones de proyectiles con paredes
-        this.physics.add.collider(this.projectileLayer, this.wallLayer, (projectile, wall) => {
-        projectile.destroy();
-        });
 
         // Hacer que la cámara siga al jugador
         this.cameras.main.startFollow(this.player);
         // Configurar límites de la cámara
         this.cameras.main.setBounds(0, 0, this.mapWidth * 25, this.mapHeight * 25);
-    }    
+    }   
 
     update() {
-        // Mover el jugador con las teclas W, A, S, D
-        const playerSpeed = 150; // Velocidad del jugador
-
+        // Mover el jugador con las teclas de flecha
         if (this.cursors.left.isDown) {
-            this.player.setVelocityX(-playerSpeed);
+            this.player.x -= 2.5;
         } else if (this.cursors.right.isDown) {
-            this.player.setVelocityX(playerSpeed);
-        } else {
-            this.player.setVelocityX(0);
+            this.player.x += 2.5;
         }
 
         if (this.cursors.up.isDown) {
-            this.player.setVelocityY(-playerSpeed);
+            this.player.y -= 2.5;
         } else if (this.cursors.down.isDown) {
-            this.player.setVelocityY(playerSpeed);
-        } else {
-            this.player.setVelocityY(0);
+            this.player.y += 2.5;
         }
 
         // Verificar si el jugador está sobre una puerta
@@ -106,38 +76,7 @@ export default class Game extends Phaser.Scene {
                 }
             }
         }
-    }
-
-    shootProjectile(targetX, targetY) {
-        const projectileSpeed = 300; // Velocidad del proyectil
-    
-        // Calcular la dirección hacia la que apunta el proyectil
-        const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, targetX, targetY);
-    
-        // Crear el proyectil en la posición del jugador
-        const projectile = this.physics.add.sprite(this.player.x, this.player.y, 'projectile');
-    
-        // Habilitar física y ajustar el tamaño del cuerpo de colisión
-        projectile.setOrigin(0.5, 0.5);
-        this.physics.add.existing(projectile);
-        projectile.body.setSize(8, 8, true);
-    
-        // Ajustar la rotación del proyectil para que apunte en la dirección correcta
-        projectile.rotation = angle;
-    
-        // Establecer la velocidad del proyectil en función del ángulo calculado
-        this.physics.velocityFromRotation(angle, projectileSpeed, projectile.body.velocity);
-    
-        // Agregar el proyectil al grupo y al arreglo de proyectiles
-        this.projectileLayer.add(projectile);
-        this.projectiles.push(projectile);
-    
-        // Destruir el proyectil después de un tiempo
-        this.time.delayedCall(2000, () => {
-            projectile.destroy();
-            this.projectiles = this.projectiles.filter(p => p !== projectile);
-        });
-    }    
+    }   
 
     generateFirstRoom(connectedDoor = null) {
         if (this.roomCount >= this.maxRooms) {
@@ -250,10 +189,7 @@ export default class Game extends Phaser.Scene {
     
                 // Generar una puerta en el lado de la habitación adyacente al pasillo
                 this.generateDoorForEmergentRoom(newRoom, door, preferredDirection);
-    
-                // Generar enemigos en la habitación generada
-                this.generateEnemies(newRoom);
-    
+                
                 return; // Habitación generada exitosamente
             }
     
@@ -272,45 +208,6 @@ export default class Game extends Phaser.Scene {
         console.log("No se pudo generar la habitación emergente después de varios intentos.");
     }
     
-    generateEnemies(room) {
-        const numEnemies = 5;
-    
-        // Asegurarse de que this.enemies es un grupo válido
-        if (!this.enemies) {
-            this.enemies = this.physics.add.group();
-        }
-    
-        for (let i = 0; i < numEnemies; i++) {
-            // Obtener una posición aleatoria dentro de la habitación
-            const x = Phaser.Math.Between(room.x, room.x + room.width - 1);
-            const y = Phaser.Math.Between(room.y, room.y + room.height - 1);
-    
-            // Crear un enemigo en la posición aleatoria
-            const enemy = this.physics.add.sprite(x, y, 'enemy');
-            this.enemies.add(enemy); // Agregar el enemigo al grupo de enemigos
-    
-            // Configurar física del enemigo
-            this.physics.add.existing(enemy);
-            enemy.body.setSize(25, 25); // Ajustar tamaño del cuerpo de colisión del enemigo
-    
-            // Seguir al jugador
-            this.physics.moveToObject(enemy, this.player, 100);
-    
-            // Colisión con proyectiles
-            this.physics.add.overlap(this.projectiles, enemy, (projectile, enemy) => {
-                projectile.destroy(); // Destruir el proyectil
-                enemy.destroy(); // Destruir el enemigo
-                this.enemies.remove(enemy); // Remover el enemigo del grupo de enemigos
-            });
-    
-            // Colisión con el jugador
-            this.physics.add.overlap(this.player, enemy, () => {
-                this.scene.start('END'); // Activar la escena END si el jugador colisiona con un enemigo
-            });
-        }
-    }
-    
-
     generateDoorForEmergentRoom(room, door, direction) {
         let doorPos;
         switch (direction) {
@@ -330,24 +227,43 @@ export default class Game extends Phaser.Scene {
                 console.error("Dirección de generación de puerta no válida.");
                 return;
         }
-    
+        
         // Crear la puerta en lugar de la pared
         this.wallLayer.children.each(function (wall) {
             if (wall.x === doorPos.x * 25 && wall.y === doorPos.y * 25) {
                 wall.destroy();
             }
         });
-    
+        
         let doorSprite = this.add.sprite(doorPos.x * 25, doorPos.y * 25, 'door');
         doorSprite.setDepth(5); // Asegurar que la puerta esté sobre los elementos de suelo pero debajo del jugador
         doorSprite.setData('position', { x: doorPos.x, y: doorPos.y });
         doorSprite.setData('used', true); // Marcar la puerta como usada
         this.doors.push(doorSprite);
         this.usedDoors.add(`${doorPos.x},${doorPos.y}`); // Agregar la puerta a la lista de puertas usadas
-    
+        
         console.log(`Puerta creada y marcada como usada en (${doorSprite.x}, ${doorSprite.y})`);
-    }                                    
+    }    
     
+    createDoor(doorPos) {
+        // Eliminar la pared existente en la posición de la puerta
+        this.wallLayer.children.each(function (wall) {
+            if (wall.x === doorPos.x * 25 && wall.y === doorPos.y * 25) {
+                wall.destroy();
+            }
+        });
+    
+        // Crear la puerta en lugar de la pared
+        let door = this.add.sprite(doorPos.x * 25, doorPos.y * 25, 'door');
+        door.setDepth(5); // Asegurar que la puerta esté sobre los elementos de suelo pero debajo del jugador
+        door.setData('position', { x: doorPos.x, y: doorPos.y });
+        door.setData('used', false);
+        this.doors.push(door); // Añadir la puerta a this.doors
+        this.usedDoors.add(`${doorPos.x},${doorPos.y}`); // Agregar la puerta a la lista de puertas usadas
+    
+        console.log(`Puerta creada en (${door.x}, ${door.y})`);
+    }                                                     
+
     generateDoors(room) {
         // Colocar puertas en los bordes de la habitación (hasta 4 puertas)
         let possibleDoorPositions = [];
@@ -434,6 +350,7 @@ export default class Game extends Phaser.Scene {
                     this.floorLayer.add(this.add.sprite((doorPos.x - passageLength) * 25, doorPos.y * 25, 'floor'));
                     this.wallLayer.add(this.add.sprite((doorPos.x - passageLength) * 25, (doorPos.y - 1) * 25, 'wall'));
                     this.wallLayer.add(this.add.sprite((doorPos.x - passageLength) * 25, (doorPos.y + 1) * 25, 'wall'));
+    
                 }
                 break;
             case 1: // Hacia la derecha
@@ -441,6 +358,7 @@ export default class Game extends Phaser.Scene {
                     this.floorLayer.add(this.add.sprite((doorPos.x + 1) * 25, doorPos.y * 25, 'floor'));
                     this.wallLayer.add(this.add.sprite((doorPos.x + 1) * 25, (doorPos.y - 1) * 25, 'wall'));
                     this.wallLayer.add(this.add.sprite((doorPos.x + 1) * 25, (doorPos.y + 1) * 25, 'wall'));
+    
                 }
                 break;
             case 2: // Hacia arriba
@@ -448,6 +366,7 @@ export default class Game extends Phaser.Scene {
                     this.floorLayer.add(this.add.sprite(doorPos.x * 25, (doorPos.y - passageLength) * 25, 'floor'));
                     this.wallLayer.add(this.add.sprite((doorPos.x - 1) * 25, (doorPos.y - passageLength) * 25, 'wall'));
                     this.wallLayer.add(this.add.sprite((doorPos.x + 1) * 25, (doorPos.y - passageLength) * 25, 'wall'));
+    
                 }
                 break;
             case 3: // Hacia abajo
@@ -455,6 +374,7 @@ export default class Game extends Phaser.Scene {
                     this.floorLayer.add(this.add.sprite(doorPos.x * 25, (doorPos.y + 1) * 25, 'floor'));
                     this.wallLayer.add(this.add.sprite((doorPos.x - 1) * 25, (doorPos.y + 1) * 25, 'wall'));
                     this.wallLayer.add(this.add.sprite((doorPos.x + 1) * 25, (doorPos.y + 1) * 25, 'wall'));
+    
                 }
                 break;
         }
@@ -463,7 +383,7 @@ export default class Game extends Phaser.Scene {
         this.generateNextRoom(door);
     
         console.log("Pasillo generado en dirección", preferredDirection);
-    }        
+    }           
 
     createRoom(room) {
         // Dibujar los bordes de la habitación
@@ -514,39 +434,5 @@ export default class Game extends Phaser.Scene {
             room1.y + room1.height > room2.y
         );
  
-    }
-
-    enemiesSpawned() {
-        const numEnemies = 5;
-    
-        // Generar enemigos
-        for (let i = 0; i < numEnemies; i++) {
-            // Obtener una posición aleatoria dentro de la habitación generada
-            const { x, y } = this.generateNextRoom(); // Suponiendo que generateNextRoom devuelve las coordenadas x e y válidas
-    
-            // Crear un enemigo en la posición generada
-            const enemy = this.physics.add.sprite(x, y, 'enemy');
-            enemy.setOrigin(0.5, 0.5);
-            this.enemies.add(enemy); // Agregar el enemigo al grupo de enemigos
-    
-            // Configurar la física del enemigo
-            this.physics.add.existing(enemy);
-            enemy.body.setSize(25, 25); // Ajustar el tamaño del cuerpo de colisión del enemigo
-    
-            // Seguir al jugador
-            this.physics.moveToObject(enemy, this.player, 100);
-    
-            // Colisiones con proyectiles
-            this.physics.add.overlap(this.projectiles, enemy, (projectile, enemy) => {
-                projectile.destroy(); // Destruir el proyectil
-                enemy.destroy(); // Destruir el enemigo
-                this.enemies.remove(enemy); // Remover el enemigo del grupo de enemigos
-            });
-    
-            // Colisión con el jugador
-            this.physics.add.overlap(this.player, enemy, () => {
-                this.scene.start('END'); // Activar la escena END si el jugador colisiona con un enemigo
-            });
-        }
     }    
 }
