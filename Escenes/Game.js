@@ -180,7 +180,7 @@ export default class Game extends Phaser.Scene {
         // Intentar generar la habitación
         let newRoom = { x: roomX, y: roomY, width: roomWidth, height: roomHeight };
     
-        for (let distance = 0; distance <= 30; distance++) {
+        for (let distance = 0; distance <= 1; distance++) {
             if (!isPositionOccupiedByRoom(roomX, roomY) && !this.checkRoomOverlap(newRoom)) {
                 this.createRoom(newRoom);
                 this.rooms.push(newRoom);
@@ -189,6 +189,9 @@ export default class Game extends Phaser.Scene {
     
                 // Generar una puerta en el lado de la habitación adyacente al pasillo
                 this.generateDoorForEmergentRoom(newRoom, door, preferredDirection);
+
+                // Llamar a generateExtraDoors para generar puertas adicionales en la habitación emergente
+                this.generateExtraDoors(newRoom);
                 
                 return; // Habitación generada exitosamente
             }
@@ -243,8 +246,66 @@ export default class Game extends Phaser.Scene {
         this.usedDoors.add(`${doorPos.x},${doorPos.y}`); // Agregar la puerta a la lista de puertas usadas
         
         console.log(`Puerta creada y marcada como usada en (${doorSprite.x}, ${doorSprite.y})`);
-    }    
+    }      
     
+    generateExtraDoors(room) {
+        let possibleDoorPositions = [];
+    
+        // Determinar las posiciones válidas para nuevas puertas en las paredes de la habitación
+        for (let x = room.x; x < room.x + room.width; x++) {
+            if (x === room.x || x === room.x + room.width - 1) {
+                // Paredes izquierda y derecha
+                for (let y = room.y + 2; y < room.y + room.height - 2; y++) {
+                    possibleDoorPositions.push({ x: x, y: y });
+                }
+            }
+        }
+    
+        // Escoger de 0 a 3 posiciones aleatorias para las puertas
+        let doorsToCreate = Phaser.Math.Between(0, Math.min(3, possibleDoorPositions.length));
+        for (let i = 0; i < doorsToCreate; i++) {
+            let doorIndex = Phaser.Math.Between(0, possibleDoorPositions.length - 1);
+            let doorPos = possibleDoorPositions[doorIndex];
+            let doorKey = `${doorPos.x},${doorPos.y}`;
+    
+            // Verificar la distancia mínima de 2 tiles con otras puertas
+            let validPosition = true;
+            for (let j = 0; j < this.doors.length; j++) {
+                let existingDoor = this.doors[j];
+                let distX = Math.abs(existingDoor.getData('position').x - doorPos.x);
+                let distY = Math.abs(existingDoor.getData('position').y - doorPos.y);
+                if (distX < 2 || distY < 2) {
+                    validPosition = false;
+                    break;
+                }
+            }
+    
+            if (validPosition && !this.usedDoors.has(doorKey)) {
+                // Reemplazar el tile de la pared con la puerta
+                this.wallLayer.children.each(function (wall) {
+                    if (wall.x === doorPos.x * 25 && wall.y === doorPos.y * 25) {
+                        wall.destroy();
+                    }
+                });
+    
+                // Crear la puerta en lugar de la pared
+                let door = this.add.sprite(doorPos.x * 25, doorPos.y * 25, 'door');
+                door.setDepth(5); // Asegurar que la puerta esté sobre los elementos de suelo pero debajo del jugador
+                door.setData('position', { x: doorPos.x, y: doorPos.y });
+                door.setData('used', false);
+                this.doors.push(door); // Añadir la puerta a this.doors
+                this.usedDoors.add(doorKey); // Agregar la puerta a la lista de puertas usadas
+    
+                // Mensaje de consola para depuración
+                console.log(`Puerta creada en (${door.x}, ${door.y}) en la habitación emergente.`);
+            }
+    
+            // Remover la posición de la lista para evitar superposiciones cercanas
+            possibleDoorPositions.splice(doorIndex, 1);
+        }
+    }
+          
+
     createDoor(doorPos) {
         // Eliminar la pared existente en la posición de la puerta
         this.wallLayer.children.each(function (wall) {
