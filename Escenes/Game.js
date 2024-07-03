@@ -5,8 +5,8 @@ export default class Game extends Phaser.Scene {
         super("main");
 
         // Definir el tamaño del mapa y el tamaño de las habitaciones
-        this.mapWidth = 40;
-        this.mapHeight = 40;
+        this.mapWidth = 500;
+        this.mapHeight = 500;
         this.roomMinSize = 4;  // Tamaño mínimo de la habitación en tiles
         this.roomMaxSize = 8;  // Tamaño máximo de la habitación en tiles
         this.maxRooms = Phaser.Math.Between(10, 50);  // Número aleatorio de habitaciones
@@ -48,9 +48,15 @@ export default class Game extends Phaser.Scene {
         this.cursors = this.input.keyboard.createCursorKeys();
 
         // Hacer que la cámara siga al jugador
-        this.cameras.main.startFollow(this.player);
-        // Configurar límites de la cámara
-        this.cameras.main.setBounds(0, 0, this.mapWidth * 25, this.mapHeight * 25);
+    this.cameras.main.startFollow(this.player);
+
+    // Configurar límites de la cámara
+    this.cameras.main.setBounds(10, 10, this.mapWidth * 25, this.mapHeight * 25);
+
+    // Personalización adicional de la cámara
+    this.cameras.main.setZoom(1.5); // Zoom de la cámara
+    this.cameras.main.setLerp(0.1, 0.1); // Suavizado de seguimiento
+    this.cameras.main.setBackgroundColor('#000000'); // Color de fondo de la cámara
     }   
 
     update() {
