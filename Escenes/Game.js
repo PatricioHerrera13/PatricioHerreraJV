@@ -28,7 +28,7 @@ export default class Game extends Phaser.Scene {
 
     create() {
         // Crear grupos para manejar las capas
-        this.wallLayer = this.add.group();
+        this.wallLayer = this.physics.add.staticGroup();
         this.floorLayer = this.add.group();
 
         // Generar la primera habitación inicial
@@ -44,32 +44,38 @@ export default class Game extends Phaser.Scene {
     
         }
     
-        // Habilitar el control de teclado
-        this.cursors = this.input.keyboard.createCursorKeys();
+    //movimiento del player
+    this.w = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);
+    this.a = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
+    this.s = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S);
+    this.d = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
 
-        // Hacer que la cámara siga al jugador
+    // Hacer que la cámara siga al jugador
     this.cameras.main.startFollow(this.player);
 
     // Configurar límites de la cámara
-    this.cameras.main.setBounds(10, 10, this.mapWidth * 25, this.mapHeight * 25);
+    this.cameras.main.setBounds(0, 0, this.mapWidth * 25, this.mapHeight * 25);
 
     // Personalización adicional de la cámara
     this.cameras.main.setZoom(1.5); // Zoom de la cámara
     this.cameras.main.setLerp(0.1, 0.1); // Suavizado de seguimiento
     this.cameras.main.setBackgroundColor('#000000'); // Color de fondo de la cámara
+    
+    // Configurar colisiones entre el jugador y las paredes
+    this.physics.add.collider(this.player, this.wallLayer);
     }   
 
     update() {
         // Mover el jugador con las teclas de flecha
-        if (this.cursors.left.isDown) {
+        if (this.a.isDown) {
             this.player.x -= 2.5;
-        } else if (this.cursors.right.isDown) {
+        } else if (this.d.isDown) {
             this.player.x += 2.5;
         }
 
-        if (this.cursors.up.isDown) {
+        if (this.w.isDown) {
             this.player.y -= 2.5;
-        } else if (this.cursors.down.isDown) {
+        } else if (this.s.isDown) {
             this.player.y += 2.5;
         }
 
