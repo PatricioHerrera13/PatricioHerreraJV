@@ -15,6 +15,7 @@ export default class Game extends Phaser.Scene {
         this.roomCount = 0;  // Contador de habitaciones generadas
         this.player = null; // Jugador
         this.doors = []; // Lista de puertas
+        this.walls = []; // Lista de paredes 
         this.playerSpawned = false; // Bandera para asegurar que el jugador se coloque solo una vez
     }        
 
@@ -29,7 +30,9 @@ export default class Game extends Phaser.Scene {
     create() {
         // Crear grupos para manejar las capas
         this.wallLayer = this.physics.add.staticGroup();
+        this.wallLayer.setDepth(10);
         this.floorLayer = this.add.group();
+        this.floorLayer.setDepth(1);
 
         // Generar la primera habitación inicial
         this.generateFirstRoom();
@@ -40,8 +43,8 @@ export default class Game extends Phaser.Scene {
             // Colocar al jugador en el centro de la primera habitación generada
             this.player = this.physics.add.sprite((firstRoom.x + firstRoom.width / 2) * 25, (firstRoom.y + firstRoom.height / 2) * 25, 'player');
             this.player.setDepth(10); // Asegurar que el jugador esté sobre los demás elementos
+            this.player.setSize(22, 25); // Definir el tamaño de la caja de colisión
             this.playerSpawned = true;
-    
         }
     
     //movimiento del player
@@ -57,7 +60,7 @@ export default class Game extends Phaser.Scene {
     this.cameras.main.setBounds(0, 0, this.mapWidth * 25, this.mapHeight * 25);
 
     // Personalización adicional de la cámara
-    this.cameras.main.setZoom(1.5); // Zoom de la cámara
+    this.cameras.main.setZoom(2.5); // Zoom de la cámara
     this.cameras.main.setLerp(0.1, 0.1); // Suavizado de seguimiento
     this.cameras.main.setBackgroundColor('#000000'); // Color de fondo de la cámara
     
@@ -68,20 +71,24 @@ export default class Game extends Phaser.Scene {
     update() {
         // Mover el jugador con las teclas de flecha
         if (this.a.isDown) {
-            this.player.x -= 2.5;
+            this.player.setVelocityX(-100); // Movimiento a la izquierda
         } else if (this.d.isDown) {
-            this.player.x += 2.5;
+            this.player.setVelocityX(100); // Movimiento a la derecha
+        } else {
+            this.player.setVelocityX(0); // Detener el movimiento horizontal
         }
-
+    
         if (this.w.isDown) {
-            this.player.y -= 2.5;
+            this.player.setVelocityY(-100); // Movimiento hacia arriba
         } else if (this.s.isDown) {
-            this.player.y += 2.5;
+            this.player.setVelocityY(100); // Movimiento hacia abajo
+        } else {
+            this.player.setVelocityY(0); // Detener el movimiento vertical
         }
 
         // Verificar si el jugador está sobre una puerta
         for (let door of this.doors) {
-            if (Phaser.Math.Distance.Between(this.player.x, this.player.y, door.x, door.y) < 12.5) {
+            if (Phaser.Math.Distance.Between(this.player.x, this.player.y, door.x, door.y) < 25) {
                 if (!door.getData('used')) {
                     this.createPassage(door);
                     door.setData('used', true);
@@ -316,15 +323,16 @@ export default class Game extends Phaser.Scene {
             possibleDoorPositions.splice(doorIndex, 1);
         }
     }
-          
 
     createDoor(doorPos) {
         // Eliminar la pared existente en la posición de la puerta
         this.wallLayer.children.each(function (wall) {
             if (wall.x === doorPos.x * 25 && wall.y === doorPos.y * 25) {
                 wall.destroy();
+                // Eliminar la posición de la pared del arreglo
+                this.wallPositions = this.wallPositions.filter(pos => !(pos.x === doorPos.x && pos.y === doorPos.y));
             }
-        });
+        }, this);
     
         // Crear la puerta en lugar de la pared
         let door = this.add.sprite(doorPos.x * 25, doorPos.y * 25, 'door');
@@ -465,6 +473,8 @@ export default class Game extends Phaser.Scene {
                 let isBorder = (x === room.x || x === room.x + room.width - 1 || y === room.y || y === room.y + room.height - 1);
                 if (isBorder) {
                     this.wallLayer.add(this.add.sprite(x * 25, y * 25, 'wall'));
+                    // Almacenar la posición de la pared
+                    this.walls.push({ x: x, y: y });
                 } else {
                     this.floorLayer.add(this.add.sprite(x * 25, y * 25, 'floor'));
                 }
