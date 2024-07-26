@@ -21,10 +21,12 @@ export default class Game extends Phaser.Scene {
 
     preload() {
         // Cargar spritesheets y otras imágenes necesarias
-        this.load.spritesheet('wall', 'public/wall.png', { frameWidth: 25, frameHeight: 25 });
-        this.load.spritesheet('floor', 'public/floor.png', { frameWidth: 25, frameHeight: 25 });
-        this.load.spritesheet('door', 'public/door.png', { frameWidth: 25, frameHeight: 25 });
+        this.load.image('wall', 'public/wall.png', { frameWidth: 25, frameHeight: 25 });
+        this.load.image('floor', 'public/floor.png', { frameWidth: 25, frameHeight: 25 });
+        this.load.image('door', 'public/door.png', { frameWidth: 25, frameHeight: 25 });
         this.load.spritesheet('player', 'public/player.png', { frameWidth: 25, frameHeight: 25 });
+        this.load.image('healthBar', 'public/healthBar.png',);
+        this.load.image('healthBarBackground', 'public/healthBarBackground.png',);
     }
 
     create() {
@@ -43,29 +45,54 @@ export default class Game extends Phaser.Scene {
             // Colocar al jugador en el centro de la primera habitación generada
             this.player = this.physics.add.sprite((firstRoom.x + firstRoom.width / 2) * 25, (firstRoom.y + firstRoom.height / 2) * 25, 'player');
             this.player.setDepth(10); // Asegurar que el jugador esté sobre los demás elementos
-            this.player.setSize(22, 25); // Definir el tamaño de la caja de colisión
+            this.player.setSize(20, 20); // Definir el tamaño de la caja de colisión
             this.playerSpawned = true;
         }
     
-    //movimiento del player
-    this.w = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);
-    this.a = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
-    this.s = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S);
-    this.d = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
+        //movimiento del player
+        this.w = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);
+        this.a = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
+        this.s = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S);
+        this.d = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
 
-    // Hacer que la cámara siga al jugador
-    this.cameras.main.startFollow(this.player);
+        // Hacer que la cámara siga al jugador
+        this.cameras.main.startFollow(this.player);
 
-    // Configurar límites de la cámara
-    this.cameras.main.setBounds(0, 0, this.mapWidth * 25, this.mapHeight * 25);
+        // Configurar límites de la cámara
+        this.cameras.main.setBounds(0, 0, this.mapWidth * 25, this.mapHeight * 25);
 
-    // Personalización adicional de la cámara
-    this.cameras.main.setZoom(2.5); // Zoom de la cámara
-    this.cameras.main.setLerp(0.1, 0.1); // Suavizado de seguimiento
-    this.cameras.main.setBackgroundColor('#000000'); // Color de fondo de la cámara
-    
-    // Configurar colisiones entre el jugador y las paredes
-    this.physics.add.collider(this.player, this.wallLayer);
+        // Personalización adicional de la cámara
+        this.cameras.main.setZoom(2.5); // Zoom de la cámara
+        this.cameras.main.setLerp(0.1, 0.1); // Suavizado de seguimiento
+        this.cameras.main.setBackgroundColor('#000000'); // Color de fondo de la cámara
+
+        // Configurar colisiones entre el jugador y las paredes
+        this.physics.add.collider(this.player, this.wallLayer);
+        
+        // Agregar texto a la cámara
+        const text = this.add.text(250, 275, 'Texto en la cámara', { fontSize: '24px', fill: '#ffffff' });
+        // Escalar el texto en función del zoom de la cámara
+        text.setScale(1 / this.cameras.main.zoom);
+        text.setDepth(11);
+        text.setScrollFactor(0); // Hacer que el texto sea fijo en la cámara (no se desplace con ella)
+
+        // Crear la barra de fondo (grisácea y transparente)
+        this.healthBarBackground = this.add.image(250, 20, 'healthBarBackground');
+        this.healthBarBackground.setOrigin(0, 0);  // Establecer el origen en la esquina superior izquierda
+        this.healthBarBackground.setScrollFactor(0);  // Hacer que la barra no se mueva con la cámara
+        this.healthBarBackground.setDepth(11);
+        // Crear la barra de vida roja
+        this.healthBar = this.add.image(250, 20, 'healthBar');
+        this.healthBar.setOrigin(0, 0);
+        this.healthBar.setScrollFactor(0);
+        this.healthBar.setDepth(12);
+        this.healthBar.cant = 500;
+        // Ajustar posición de la barra de vida en relación al texto
+        this.healthBarBackground.x = 250; // Cambiar según la posición que necesitas
+        this.healthBarBackground.y = 250;
+        this.healthBar.x = 250; // Cambiar según la posición que necesitas
+        this.healthBar.y = 250;
+
     }   
 
     update() {
@@ -95,7 +122,12 @@ export default class Game extends Phaser.Scene {
                 }
             }
         }
-    }   
+    } 
+    
+    
+
+
+
 
     generateFirstRoom(connectedDoor = null) {
         if (this.roomCount >= this.maxRooms) {
