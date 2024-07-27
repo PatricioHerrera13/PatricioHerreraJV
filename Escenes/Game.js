@@ -17,7 +17,19 @@ export default class Game extends Phaser.Scene {
         this.doors = []; // Lista de puertas
         this.walls = []; // Lista de paredes 
         this.playerSpawned = false; // Bandera para asegurar que el jugador se coloque solo una vez
-    }        
+        this.playerHealth = 100; // Vida máxima
+    }
+
+    init() {
+        this.gameOver = false;
+        this.timer = 300;
+        this.score = 0;
+        this.shapes = {
+          triangle: { points: 10, count: 0 },
+          square: { points: 20, count: 0 },
+          diamond: { points: 30, count: 0 },
+        };
+    }           
 
     preload() {
         // Cargar spritesheets y otras imágenes necesarias
@@ -27,6 +39,10 @@ export default class Game extends Phaser.Scene {
         this.load.spritesheet('player', 'public/player.png', { frameWidth: 25, frameHeight: 25 });
         this.load.image('healthBar', 'public/healthBar.png',);
         this.load.image('healthBarBackground', 'public/healthBarBackground.png',);
+
+        this.load.image("triangle", "./public/assets/triangle.png");
+        this.load.image("square", "./public/assets/square.png");
+        this.load.image("diamond", "./public/assets/diamond.png");
     }
 
     create() {
@@ -35,6 +51,7 @@ export default class Game extends Phaser.Scene {
         this.wallLayer.setDepth(10);
         this.floorLayer = this.add.group();
         this.floorLayer.setDepth(1);
+        this.collectibles = this.physics.add.group();
 
         // Generar la primera habitación inicial
         this.generateFirstRoom();
@@ -68,31 +85,34 @@ export default class Game extends Phaser.Scene {
 
         // Configurar colisiones entre el jugador y las paredes
         this.physics.add.collider(this.player, this.wallLayer);
-        
+
+        this.rKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
         // Agregar texto a la cámara
-        const text = this.add.text(250, 275, 'Texto en la cámara', { fontSize: '24px', fill: '#ffffff' });
-        // Escalar el texto en función del zoom de la cámara
+        const text = this.timerText = this.add.text(250, 275, `Time left: ${this.timer}`, {fontSize: "20px", fill: "#fff",});
+        text.setScale(1 / this.cameras.main.zoom);// Escalar el texto en función del zoom de la cámara
+        text.setDepth(11);
+        text.setScrollFactor(0); // Hacer que el texto sea fijo en la cámara (no se desplace con ella)
+
+        this.scoreText = this.add.text(250, 280,
+            `Score: ${this.score}
+              T: ${this.shapes["triangle"].count}
+              S: ${this.shapes["square"].count}
+              D: ${this.shapes["diamond"].count}`
+        );
         text.setScale(1 / this.cameras.main.zoom);
         text.setDepth(11);
         text.setScrollFactor(0); // Hacer que el texto sea fijo en la cámara (no se desplace con ella)
 
-        // Crear la barra de fondo (grisácea y transparente)
-        this.healthBarBackground = this.add.image(250, 20, 'healthBarBackground');
-        this.healthBarBackground.setOrigin(0, 0);  // Establecer el origen en la esquina superior izquierda
-        this.healthBarBackground.setScrollFactor(0);  // Hacer que la barra no se mueva con la cámara
-        this.healthBarBackground.setDepth(11);
-        // Crear la barra de vida roja
-        this.healthBar = this.add.image(250, 20, 'healthBar');
-        this.healthBar.setOrigin(0, 0);
-        this.healthBar.setScrollFactor(0);
-        this.healthBar.setDepth(12);
-        this.healthBar.cant = 500;
-        // Ajustar posición de la barra de vida en relación al texto
-        this.healthBarBackground.x = 250; // Cambiar según la posición que necesitas
-        this.healthBarBackground.y = 250;
-        this.healthBar.x = 250; // Cambiar según la posición que necesitas
-        this.healthBar.y = 250;
+        this.physics.add.collider(
+            this.character,
+            this.collectibles,
+            this.onShapeCollect,
+            null,
+            this
+        );
 
+        // Crear la barra de vida
+        this.createHealthBar();
     }   
 
     update() {
@@ -122,12 +142,58 @@ export default class Game extends Phaser.Scene {
                 }
             }
         }
+
+        this.updateHealthBar();
+
+        if (this.gameOver && this.rKey.isDown) {
+            this.scene.restart();
+          }
+          if (this.gameOver) {
+            this.physics.pause();
+            this.timerText.setText("Game Over");
+            return;
+        }
     } 
-    
-    
 
+    createHealthBar() {
+        // Crear la barra de fondo (grisácea y transparente)
+        this.healthBarBackground = this.add.image(250, 20, 'healthBarBackground');
+        this.healthBarBackground.setOrigin(0, 0);  // Establecer el origen en la esquina superior izquierda
+        this.healthBarBackground.setScrollFactor(0);  // Hacer que la barra no se mueva con la cámara
+        this.healthBarBackground.setDepth(11);
+        // Crear la barra de vida roja
+        this.healthBar = this.add.image(250, 20, 'healthBar');
+        this.healthBar.setOrigin(0, 0);
+        this.healthBar.setScrollFactor(0);
+        this.healthBar.setDepth(12);
+        // Ajustar posición de la barra de vida en relación al texto
+        this.healthBarBackground.x = 250; // Cambiar según la posición que necesitas
+        this.healthBarBackground.y = 250;
+        this.healthBar.x = 250; // Cambiar según la posición que necesitas
+        this.healthBar.y = 250;
+    }
 
+    updateHealthBar() {
+        this.healthBar.scaleX = this.playerHealth / 100;
+    }
 
+    takeDamage(amount) {
+        this.playerHealth = Math.max(0, this.playerHealth - amount);
+        if (this.playerHealth === 0) {
+            this.handlePlayerDeath();
+        }
+    }
+
+    heal(amount) {
+        this.playerHealth = Math.min(100, this.playerHealth + amount);
+    }
+
+    handlePlayerDeath() {
+        console.log('El jugador ha muerto');
+        // Implementar lógica de muerte del jugador
+    }
+
+    /////////////////////////////////
 
     generateFirstRoom(connectedDoor = null) {
         if (this.roomCount >= this.maxRooms) {
