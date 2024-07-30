@@ -316,8 +316,8 @@ export default class Game extends Phaser.Scene {
     checkWin(){
         const meetsPoints = this.score >= 60;
         const meetsShapes =
-            this.shapes["bone"].count >= 1 &&
-            this.shapes["goldCoin"].count >= 1 &&
+            this.shapes["bone"].count >= 1 ||
+            this.shapes["goldCoin"].count >= 1 ||
             this.shapes["diamond"].count >= 1;
         if (meetsPoints && meetsShapes) {
             console.log("You won");
