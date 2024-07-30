@@ -16,8 +16,9 @@ export default class Game extends Phaser.Scene {
         this.player = null; // Jugador
         this.doors = []; // Lista de puertas
         this.walls = []; // Lista de paredes 
+        this.floors =  [] // Lista de pisos
         this.playerSpawned = false; // Bandera para asegurar que el jugador se coloque solo una vez
-        this.playerHealth = 100; // Vida máxima
+        this.playerHealth = 100; // Vida máxima 
     }
 
     init() {
@@ -25,8 +26,8 @@ export default class Game extends Phaser.Scene {
         this.timer = 300;
         this.score = 0;
         this.shapes = {
-          triangle: { points: 10, count: 0 },
-          square: { points: 20, count: 0 },
+          bone: { points: 10, count: 0 },
+          goldCoin: { points: 20, count: 0 },
           diamond: { points: 30, count: 0 },
         };
     }           
@@ -40,19 +41,28 @@ export default class Game extends Phaser.Scene {
         this.load.image('healthBar', 'public/healthBar.png',);
         this.load.image('healthBarBackground', 'public/healthBarBackground.png',);
 
-        this.load.image("triangle", "./public/assets/triangle.png");
-        this.load.image("square", "./public/assets/square.png");
-        this.load.image("diamond", "./public/assets/diamond.png");
+        this.load.image('bone', 'public/bone.png',);
+        this.load.image('goldCoin', 'public/goldCoin.png',);
+        this.load.image('diamond', 'public/diamond.png',);
+
+        this.load.image('enemy', 'public/enemy.png',);
+
+        this.load.image('healingItem', 'public/healingItem.png');
     }
 
     create() {
-        // Crear grupos para manejar las capas
+        // Crear grupos 
         this.wallLayer = this.physics.add.staticGroup();
         this.wallLayer.setDepth(10);
         this.floorLayer = this.add.group();
         this.floorLayer.setDepth(1);
-        this.collectibles = this.physics.add.group();
-
+        this.collectibles = this.physics.add.staticGroup();
+        this.collectibles.setDepth(2)
+        this.enemy = this.physics.add.group();
+        this.enemy.setDepth(10)
+        this.meleeWeapon = this.physics.add.group();
+        this.healingItems = this.physics.add.group();
+        
         // Generar la primera habitación inicial
         this.generateFirstRoom();
     
@@ -64,6 +74,8 @@ export default class Game extends Phaser.Scene {
             this.player.setDepth(10); // Asegurar que el jugador esté sobre los demás elementos
             this.player.setSize(20, 20); // Definir el tamaño de la caja de colisión
             this.playerSpawned = true;
+            this.player.Wounded = false;
+            this.player.immuneTime = 0;
         }
     
         //movimiento del player
@@ -71,6 +83,10 @@ export default class Game extends Phaser.Scene {
         this.a = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
         this.s = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S);
         this.d = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
+
+        this.input.keyboard.on('keydown-SPACE', () => {
+            this.meleeAttack();
+        });
 
         // Hacer que la cámara siga al jugador
         this.cameras.main.startFollow(this.player);
@@ -83,36 +99,51 @@ export default class Game extends Phaser.Scene {
         this.cameras.main.setLerp(0.1, 0.1); // Suavizado de seguimiento
         this.cameras.main.setBackgroundColor('#000000'); // Color de fondo de la cámara
 
-        // Configurar colisiones entre el jugador y las paredes
-        this.physics.add.collider(this.player, this.wallLayer);
-
         this.rKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
+        
+        this.time.addEvent({
+            delay: 1000,
+            callback: this.handleTimer,
+            callbackScope: this,
+            loop: true,
+        });
+        
         // Agregar texto a la cámara
-        const text = this.timerText = this.add.text(250, 275, `Time left: ${this.timer}`, {fontSize: "20px", fill: "#fff",});
-        text.setScale(1 / this.cameras.main.zoom);// Escalar el texto en función del zoom de la cámara
-        text.setDepth(11);
-        text.setScrollFactor(0); // Hacer que el texto sea fijo en la cámara (no se desplace con ella)
+        this.timerText = this.add.text(250, 275, `Time left: ${this.timer}`, {fontSize: "20px", fill: "#fff",});
+        this.timerText.setScale(1 / this.cameras.main.zoom);// Escalar el texto en función del zoom de la cámara
+        this.timerText.setDepth(11);
+        this.timerText.setScrollFactor(0); // Hacer que el texto sea fijo en la cámara (no se desplace con ella)
 
-        this.scoreText = this.add.text(250, 280,
+        this.scoreText = this.add.text(250, 285,
             `Score: ${this.score}
-              T: ${this.shapes["triangle"].count}
-              S: ${this.shapes["square"].count}
+              B: ${this.shapes["bone"].count}
+              G: ${this.shapes["goldCoin"].count}
               D: ${this.shapes["diamond"].count}`
         );
-        text.setScale(1 / this.cameras.main.zoom);
-        text.setDepth(11);
-        text.setScrollFactor(0); // Hacer que el texto sea fijo en la cámara (no se desplace con ella)
-
-        this.physics.add.collider(
-            this.character,
-            this.collectibles,
-            this.onShapeCollect,
-            null,
-            this
-        );
+        this.scoreText.setScale(1 / this.cameras.main.zoom);
+        this.scoreText.setDepth(11);
+        this.scoreText.setScrollFactor(0); // Hacer que el texto sea fijo en la cámara (no se desplace con ella)
 
         // Crear la barra de vida
         this.createHealthBar();
+
+        // Configurar colisiones entre el jugador y los objetos curativos
+        this.physics.add.overlap(this.player, this.healingItems, this.handleHealingItem, null, this);
+
+        // Configurar colisiones entre el jugador y las paredes
+        this.physics.add.collider(this.player, this.wallLayer);
+
+        // Configurar colisiones entre los enemigos y las paredes
+        this.physics.add.collider(this.enemy, this.wallLayer);
+
+        // Configurar colisiones entre los enemigos 
+        this.physics.add.collider(this.enemy, this.enemy);
+
+        //Configurar colisiones entre el jugador y los recolectables
+        this.physics.add.collider(this.player, this.collectibles, this.counterCollectible, null, this);
+
+        // Configurar colisiones entre el jugador y los enemigos
+        this.physics.add.overlap(this.player, this.enemy, this.handleEnemyCollision, null, this);
     }   
 
     update() {
@@ -143,17 +174,39 @@ export default class Game extends Phaser.Scene {
             }
         }
 
+        //  Actualización de la vida del player 
         this.updateHealthBar();
+
+        console.log(this.time.now);
+
+        if (this.time.now >= this.player.immuneTime) {
+            this.player.Wounded = false;
+            this.player.clearTint();
+        }
 
         if (this.gameOver && this.rKey.isDown) {
             this.scene.restart();
-          }
-          if (this.gameOver) {
+        } else if (this.gameOver) {
             this.physics.pause();
             this.timerText.setText("Game Over");
             return;
         }
+
+        // Lógica de persecución de enemigos
+        this.enemy.children.iterate((enemy) => {
+        const distance = Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y);
+        
+            if (distance < enemy.getData('range')) {
+                enemy.setData('chasing', true);
+                this.physics.moveToObject(enemy, this.player, enemy.getData('speed'));
+            } else {
+                enemy.setData('chasing', false);
+                enemy.setVelocity(0);
+            }
+        });
     } 
+
+    ////////////////// Funciones de gestion y creacion de vida //////////////////
 
     createHealthBar() {
         // Crear la barra de fondo (grisácea y transparente)
@@ -178,22 +231,152 @@ export default class Game extends Phaser.Scene {
     }
 
     takeDamage(amount) {
+        if (this.player.Wounded == false){
         this.playerHealth = Math.max(0, this.playerHealth - amount);
+        this.player.Wounded = true;
+        this.player.setTint(0xff0000);
+        this.player.immuneTime = this.time.now + 2000;
+        }
         if (this.playerHealth === 0) {
-            this.handlePlayerDeath();
+            console.log('El jugador ha muerto');
+            this.gameOver = true;
+            this.scene.start("end", {
+                score: this.score,
+                gameOver: this.gameOver,
+            });
         }
     }
 
     heal(amount) {
         this.playerHealth = Math.min(100, this.playerHealth + amount);
+        
+        // Actualizar la barra de salud en la interfaz
+        this.updateHealthBar();
     }
 
-    handlePlayerDeath() {
-        console.log('El jugador ha muerto');
-        // Implementar lógica de muerte del jugador
+    generateHealingItems() {
+        // Generar objetos curativos en habitaciones aleatorias
+        if (this.playerHealth < 100 ) {
+            // Elegir una posición aleatoria de entre las posiciones de los pisos
+            const floorPosition = Phaser.Math.RND.pick(this.floors);
+            const x = floorPosition.x * 25; // Ajustar según el tamaño del tile de piso
+            const y = floorPosition.y * 25; // Ajustar según el tamaño del tile de piso
+            let healingItem = this.healingItems.create(x, y, 'healingItem');
+            healingItem.setDepth(5); // Ajustar profundidad según necesidad
+        }
     }
 
-    /////////////////////////////////
+    handleHealingItem(player, healingItem) {
+        // Eliminar el objeto curativo del juego
+        healingItem.destroy();
+    
+        // Curar al jugador 10 puntos de vida
+        this.heal(10);
+    }
+
+    ////////////////// Funciones de generacion de enemigos //////////////////
+
+    spawnerEnemy(room) {
+        if (this.gameOver) return;
+
+        // Elegir una posición aleatoria de entre las posiciones de los pisos
+        const floorPosition = Phaser.Math.RND.pick(this.floors);
+        const x = floorPosition.x * 25; // Ajustar según el tamaño del tile de piso
+        const y = floorPosition.y * 25; // Ajustar según el tamaño del tile de piso
+        let enemy = this.enemy.create(x, y, "enemy")
+        enemy.setData('speed', 40); // Velocidad de movimiento del enemigo
+        enemy.setData('range', 50); // Rango de persecución
+        enemy.setData('chasing', false); // Estado de persecución
+    }
+
+    handleEnemyCollision(player, enemy) {
+        // Reducir la vida del jugador en 10 puntos
+        this.takeDamage(10);
+    }
+
+    ////////////////// Funciones de sistema de combate /////////////////
+
+    // Método para el ataque cuerpo a cuerpo
+    meleeAttack() {
+        const playerX = this.player.x;
+        const playerY = this.player.y;
+        const meleeAttackRadius = 50; // Ajustar según el tamaño deseado del radio de ataque
+
+        // Buscar enemigos cercanos dentro de un radio (circunferencia) al jugador
+        this.enemy.getChildren().forEach((enemy) => {
+            const distance = Phaser.Math.Distance.Between(playerX, playerY, enemy.x, enemy.y);
+            if (distance <= meleeAttackRadius) {
+                enemy.destroy(); // Eliminar enemigo al ser golpeado
+            }
+        });
+    }
+
+    ////////////////// Funciones de generacion de recolectables //////////////////
+
+    generateCollectible() {
+        if (this.gameOver) return;
+      
+        const types = ["bone", "goldCoin", "diamond", ];
+        const type = Phaser.Math.RND.pick(types);
+      
+        // Elegir una posición aleatoria de entre las posiciones de los pisos
+        const floorPosition = Phaser.Math.RND.pick(this.floors);
+        const x = floorPosition.x * 25; // Ajustar según el tamaño del tile de piso
+        const y = floorPosition.y * 25; // Ajustar según el tamaño del tile de piso
+        
+        let collectible = this.collectibles.create(x, y, type);
+        
+        collectible.setData("points", this.shapes[type].points);
+        collectible.setData("type", type);
+    }
+
+    counterCollectible( player, collectible) {
+        const typeName = collectible.getData("type");
+        const points = collectible.getData("points");
+        this.score += points;
+        this.shapes[typeName].count += 1;
+        console.table(this.shapes);
+        console.log("Collected ", collectible.texture.key, points);
+        console.log("Score ", this.score);
+        collectible.destroy();
+        this.scoreText.setText(
+          `Score: ${this.score}
+            B: ${this.shapes["bone"].count}
+            G: ${this.shapes["goldCoin"].count}
+            D: ${this.shapes["diamond"].count}`
+        );
+        this.checkWin();
+    }
+
+    checkWin(){
+        const meetsPoints = this.score >= 60;
+        const meetsShapes =
+            this.shapes["bone"].count >= 1 &&
+            this.shapes["goldCoin"].count >= 1 &&
+            this.shapes["diamond"].count >= 1;
+
+        if (meetsPoints && meetsShapes) {
+            console.log("You won");
+            this.scene.start("end", {
+                score: this.score,
+                gameOver: this.gameOver,
+            });
+        }
+    }
+
+    handleTimer() {
+        this.timer -= 1;
+        this.timerText.setText(`Time left: ${this.timer}`);
+        if (this.timer === 0 ) {
+          this.gameOver = true;
+          this.scene.start("end", {
+            score: this.score,
+            gameOver: this.gameOver,
+          });
+        }
+    }
+
+    ////////////////// Funciones de generacion de mapa //////////////////
 
     generateFirstRoom(connectedDoor = null) {
         if (this.roomCount >= this.maxRooms) {
@@ -303,12 +486,21 @@ export default class Game extends Phaser.Scene {
                 this.rooms.push(newRoom);
                 this.roomCount++;
                 console.log(`Habitación emergente generada en (${roomX}, ${roomY}) de tamaño ${roomWidth}x${roomHeight}`);
-    
+                
                 // Generar una puerta en el lado de la habitación adyacente al pasillo
                 this.generateDoorForEmergentRoom(newRoom, door, preferredDirection);
 
                 // Llamar a generateExtraDoors para generar puertas adicionales en la habitación emergente
                 this.generateExtraDoors(newRoom);
+
+                //Llama a generateCollectible para que se generen objetos recolectables 
+                this.generateCollectible(newRoom);
+    
+                //Llama a spawnerEnemy para que se generen enemigos 
+                this.spawnerEnemy(newRoom);
+                
+                // Generar objetos curativos en el juego
+                this.generateHealingItems(newRoom);
                 
                 return; // Habitación generada exitosamente
             }
@@ -320,7 +512,7 @@ export default class Game extends Phaser.Scene {
                 case 2: roomY--; break; // Arriba
                 case 3: roomY++; break; // Abajo
             }
-    
+            
             // Actualizar la posición de la habitación y la variable de comprobación
             newRoom = { x: roomX, y: roomY, width: roomWidth, height: roomHeight };
         }
@@ -575,6 +767,8 @@ export default class Game extends Phaser.Scene {
                     this.walls.push({ x: x, y: y });
                 } else {
                     this.floorLayer.add(this.add.sprite(x * 25, y * 25, 'floor'));
+                    // Almacenar la posición del piso
+                    this.floors.push({ x: x, y: y });
                 }
             }
         }
