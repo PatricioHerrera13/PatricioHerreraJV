@@ -22,7 +22,7 @@ export default class Game extends Phaser.Scene {
 
     init() {
         this.gameOver = false;
-        this.timer = 300;
+        this.timer = 20;
         this.score = 0;
         this.shapes = {
           bone: { points: 10, count: 0 },
@@ -95,7 +95,7 @@ export default class Game extends Phaser.Scene {
         this.cameras.main.setBackgroundColor('#000000'); // Camera background color
 
         this.rKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
-        
+
         this.time.addEvent({
             delay: 1000,
             callback: this.handleTimer,
@@ -136,6 +136,14 @@ export default class Game extends Phaser.Scene {
     }   
 
     update() {
+        if (this.gameOver && this.rKey.isDown) {
+            this.scene.restart();
+        }
+        if (this.gameOver) {
+            this.physics.pause();
+            this.timerText.setText("Game Over");
+            return;
+        }
         if (this.a.isDown) {
             this.player.setVelocityX(-100); // Movement to the left
         } else if (this.d.isDown) {
@@ -165,13 +173,6 @@ export default class Game extends Phaser.Scene {
         if (this.time.now >= this.player.immuneTime) {
             this.player.Wounded = false;
             this.player.clearTint();
-        }
-        if (this.gameOver && this.rKey.isDown) {
-            this.scene.restart();
-        } else if (this.gameOver) {
-            this.physics.pause();
-            this.timerText.setText("Game Over");
-            return;
         }
         // Enemy pursuit logic
         this.enemy.children.iterate((enemy) => {
@@ -246,8 +247,8 @@ export default class Game extends Phaser.Scene {
 
     handleHealingItem(player, healingItem) {
         healingItem.destroy();
-        // Heal the player 10 health points
-        this.heal(10);
+        // Heal the player 50 health points
+        this.heal(50);
     }
 
     // Enemy Spawning Features
@@ -263,8 +264,8 @@ export default class Game extends Phaser.Scene {
     }
 
     handleEnemyCollision(player, enemy) {
-        // Reduce player's life by 10 points
-        this.takeDamage(10);
+        // Reduce player's life by 50 points
+        this.takeDamage(50);
     }
 
     // Combat system functions
@@ -284,7 +285,8 @@ export default class Game extends Phaser.Scene {
 
     // Collectibles Generation Functions
     generateCollectible() {
-        if (this.gameOver) return;
+        if (this.gameOver) { return;
+        }
         const types = ["bone", "goldCoin", "diamond", ];
         const type = Phaser.Math.RND.pick(types);
         const floorPosition = Phaser.Math.RND.pick(this.floors);
@@ -314,7 +316,7 @@ export default class Game extends Phaser.Scene {
     }
 
     checkWin(){
-        const meetsPoints = this.score >= 60;
+        const meetsPoints = this.score >= 40;
         const meetsShapes =
             this.shapes["bone"].count >= 1 ||
             this.shapes["goldCoin"].count >= 1 ||
@@ -505,8 +507,17 @@ export default class Game extends Phaser.Scene {
                 }
             }
         }
-        // Choose from 0 to 3 random positions for the doors
-        let doorsToCreate = Phaser.Math.Between(0, Math.min(3, possibleDoorPositions.length));
+        // Add top and bottom walls
+        for (let y = room.y; y < room.y + room.height; y++) {
+            // Consider top and bottom walls
+            if (y === room.y || y === room.y + room.height - 1) {
+                for (let x = room.x + 2; x < room.x + room.width - 2; x++) {
+                    possibleDoorPositions.push({ x: x, y: y });
+                }
+            }
+        }
+        // Choose from 2 to 3 random positions for the doors
+        let doorsToCreate = Phaser.Math.Between(2, Math.min(3, possibleDoorPositions.length));
         for (let i = 0; i < doorsToCreate; i++) {
             let doorIndex = Phaser.Math.Between(0, possibleDoorPositions.length - 1);
             let doorPos = possibleDoorPositions[doorIndex];
