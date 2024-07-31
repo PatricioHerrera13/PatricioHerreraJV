@@ -94,7 +94,7 @@ export default class Game extends Phaser.Scene {
         this.cameras.main.setLerp(0.1, 0.1); // Tracking smoothing
         this.cameras.main.setBackgroundColor('#000000'); // Camera background color
 
-        this.rKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
+        this.restartKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
 
         this.time.addEvent({
             delay: 1000,
@@ -136,7 +136,7 @@ export default class Game extends Phaser.Scene {
     }   
 
     update() {
-        if (this.gameOver && this.rKey.isDown) {
+        if (this.gameOver && this.restartKey.isDown) {
             this.scene.restart();
         }
         if (this.gameOver) {
